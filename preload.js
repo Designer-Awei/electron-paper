@@ -48,8 +48,12 @@ async function fetchArxivPapers(searchQueries, options = {}) {
                 // 构建查询部分
                 const queryPart = `${prefix}:${formattedTerm}`;
                 
-                // 添加布尔运算符（第一个条件不需要运算符）
-                return index === 0 ? queryPart : `${operator}+${queryPart}`;
+                // 添加布尔运算符（第一个条件或空运算符不添加运算符前缀）
+                if (index === 0 || !operator) {
+                    return queryPart;
+                } else {
+                    return `${operator}+${queryPart}`;
+                }
             }).join('+');
 
             // 不要一次请求太多数据，避免API限制

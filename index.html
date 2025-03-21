@@ -25,6 +25,7 @@
             padding: 16px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            position: relative;
         }
         .search-row,
         .field-row {
@@ -32,18 +33,73 @@
             align-items: center;
             gap: 12px;
             width: 100%;
+            position: relative;
+            box-sizing: border-box;
+            flex-wrap: nowrap;
         }
         .search-group {
             display: grid;
-            grid-template-columns: 120px 1fr 120px;
+            grid-template-columns: 120px 1fr;
             gap: 12px;
-            width: calc(100% - 112px);
+            width: calc(100% - 124px); /* 减去按钮容器宽度 */
+            box-sizing: border-box;
+            min-width: 0;
         }
         .field-group {
             display: grid;
-            grid-template-columns: 120px 1fr 120px;
+            grid-template-columns: 120px 1fr;
             gap: 12px;
-            width: calc(100% - 112px);
+            width: calc(100% - 92px - 124px); /* 减去操作符宽度和按钮容器宽度 */
+            min-width: 0;
+            box-sizing: border-box;
+            flex-shrink: 1;
+        }
+        /* 新增样式 - 设置搜索操作符宽度和位置 */
+        .search-operator {
+            width: 80px;
+            min-width: 80px;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        /* 添加按钮容器样式 */
+        .button-container {
+            display: flex;
+            justify-content: center;
+            width: 112px;
+            min-width: 112px;
+            margin-left: 12px;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        /* 媒体查询 - 当屏幕变窄时调整布局 */
+        @media (max-width: 768px) {
+            .search-row,
+            .field-row {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                position: relative;
+            }
+            .search-group,
+            .field-group {
+                min-width: 0;
+                width: 100%;
+            }
+            .button-container {
+                margin-left: 12px;
+                width: 112px;
+                min-width: 112px;
+                justify-content: center;
+            }
+            .danger-button,
+            .secondary-button {
+                width: 100px;
+                min-width: 100px;
+                max-width: 100px;
+            }
+            .search-operator {
+                width: 80px;
+                min-width: 80px;
+            }
         }
         .search-group select,
         .field-group select {
@@ -162,6 +218,9 @@
         .primary-button {
             background-color: #4CAF50;
             color: white;
+            width: 100px;
+            min-width: 100px;
+            max-width: 100px;
         }
         .primary-button:hover {
             background-color: #45a049;
@@ -222,6 +281,8 @@
             flex-direction: column;
             gap: 10px;
             width: 100%;
+            position: relative;
+            overflow-x: hidden;
         }
         table {
             width: 100%;
@@ -338,12 +399,16 @@
             flex-wrap: wrap;
             justify-content: space-between;
         }
+        input.search-input {
+            min-width: 0;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
     <h1>arXiv 论文搜索</h1>
     <div class="search-container">
-        <div class="search-row">
+        <div class="search-row" style="flex-wrap: nowrap; overflow-x: auto;">
             <div class="search-group">
                 <select id="searchField">
                     <option value="all">所有字段</option>
@@ -353,13 +418,17 @@
                     <option value="cat">分类</option>
                 </select>
                 <input type="text" id="searchInput" placeholder="输入搜索关键词...">
+            </div>
+            <div style="display: none;">
                 <select id="operator">
                     <option value="AND">AND</option>
                     <option value="OR">OR</option>
-                    <option value="ANDNOT">ANDNOT</option>
+                    <option value="NOT">NOT</option>
                 </select>
             </div>
-            <button class="secondary-button" id="addFieldBtn">添加字段</button>
+            <div class="button-container">
+                <button class="secondary-button" id="addFieldBtn">添加字段</button>
+            </div>
         </div>
         <div id="additionalFields"></div>
         <div class="search-options">
@@ -386,7 +455,9 @@
                     <span>结果限制</span>
                     <input type="number" id="maxResults" min="1" max="100" value="40">
                 </div>
-                <button class="primary-button" id="searchButton">搜索</button>
+                <div class="button-container" style="margin-left: 0; width: 112px; min-width: 112px;">
+                    <button class="primary-button" id="searchButton">搜索</button>
+                </div>
             </div>
         </div>
     </div>

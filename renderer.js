@@ -78,6 +78,11 @@ function createSearchFieldRow() {
     const fieldRow = document.createElement('div');
     fieldRow.className = 'field-row';
     
+    // 创建一个关系运算符选择器（AND/OR/NOT）
+    const operatorSelect = document.createElement('select');
+    operatorSelect.className = 'search-operator';
+    operatorSelect.innerHTML = operator.innerHTML;
+    
     const fieldGroup = document.createElement('div');
     fieldGroup.className = 'field-group';
     
@@ -90,20 +95,24 @@ function createSearchFieldRow() {
     input.className = 'search-input';
     input.placeholder = '输入搜索关键词...';
     
-    const operatorSelect = document.createElement('select');
-    operatorSelect.className = 'search-operator';
-    operatorSelect.innerHTML = operator.innerHTML;
+    // 创建按钮容器
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'button-container';
     
     const removeBtn = document.createElement('button');
     removeBtn.className = 'danger-button';
     removeBtn.textContent = '删除';
     removeBtn.onclick = () => fieldRow.remove();
     
+    // 将按钮添加到按钮容器
+    buttonContainer.appendChild(removeBtn);
+    
+    // 组装元素
+    fieldRow.appendChild(operatorSelect);
     fieldGroup.appendChild(select);
     fieldGroup.appendChild(input);
-    fieldGroup.appendChild(operatorSelect);
     fieldRow.appendChild(fieldGroup);
-    fieldRow.appendChild(removeBtn);
+    fieldRow.appendChild(buttonContainer);
     
     return fieldRow;
 }
@@ -121,7 +130,7 @@ function getSearchQueries() {
         queries.push({
             field: searchField.value,
             term: mainTerm,
-            operator: 'AND'  // 第一个条件的运算符会被忽略
+            operator: '' // 第一个条件不需要运算符
         });
     }
     
@@ -142,7 +151,7 @@ function getSearchQueries() {
         queries.push({
             field: 'all',
             term: '',  // 默认为空
-            operator: 'AND'
+            operator: '' // 第一个条件不需要运算符
         });
     }
     
