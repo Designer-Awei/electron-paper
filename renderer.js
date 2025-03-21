@@ -304,30 +304,95 @@ function renderPapers() {
     currentPagePapers.forEach((paper, index) => {
         const paperIndex = startIndex + index + 1;
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>
-                <div style="height: 100%; display: flex; flex-direction: column;">
-                    <div class="title-cell" style="flex: 0 0 auto;">
-                        <small style="color: #666;">[${paperIndex}]</small> ${paper.title}
-                    </div>
-                    <div style="margin-top: 5px; font-size: 0.8em; color: #666;">
-                        分类: ${paper.categories.join(', ')}
-                    </div>
-                </div>
-            </td>
-            <td>
-                <div style="height: 100%; display: flex; flex-direction: column;">
-                    <div class="authors-cell" style="flex: 0 0 auto;">${paper.authors}</div>
-                </div>
-            </td>
-            <td>${new Date(paper.published).toLocaleDateString('zh-CN')}</td>
-            <td class="link-cell">
-                <a href="${paper.link}" target="_blank">查看</a>
-            </td>
-            <td>
-                <div class="abstract-cell">${paper.summary}</div>
-            </td>
-        `;
+        
+        // 创建标题单元格
+        const titleCell = document.createElement('td');
+        const titleContainer = document.createElement('div');
+        titleContainer.style.display = 'flex';
+        titleContainer.style.flexDirection = 'column';
+        
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'title-cell';
+        titleDiv.innerHTML = `<small style="color: #666;">[${paperIndex}]</small> ${paper.title}`;
+        
+        const categoryDiv = document.createElement('div');
+        categoryDiv.style.marginTop = '5px';
+        categoryDiv.style.fontSize = '0.8em';
+        categoryDiv.style.color = '#666';
+        categoryDiv.textContent = `分类: ${paper.categories.join(', ')}`;
+        
+        titleContainer.appendChild(titleDiv);
+        titleContainer.appendChild(categoryDiv);
+        titleCell.appendChild(titleContainer);
+        
+        // 创建作者单元格
+        const authorCell = document.createElement('td');
+        const authorContainer = document.createElement('div');
+        authorContainer.style.height = '100%';
+        
+        const authorDiv = document.createElement('div');
+        authorDiv.className = 'authors-cell';
+        authorDiv.textContent = paper.authors;
+        
+        // 将作者省略号始终显示在最后一行
+        authorContainer.appendChild(authorDiv);
+        authorCell.appendChild(authorContainer);
+        
+        // 创建日期单元格
+        const dateCell = document.createElement('td');
+        dateCell.textContent = new Date(paper.published).toLocaleDateString('zh-CN');
+        
+        // 创建链接单元格
+        const linkCell = document.createElement('td');
+        linkCell.className = 'link-cell';
+        
+        const link = document.createElement('a');
+        link.href = paper.link;
+        link.target = '_blank';
+        link.textContent = '查看';
+        
+        linkCell.appendChild(link);
+        
+        // 创建摘要单元格
+        const summaryCell = document.createElement('td');
+        
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'abstract-cell';
+        summaryDiv.innerHTML = paper.summary;
+        
+        // 动态调整摘要区域高度和作者区域高度，根据标题高度
+        setTimeout(() => {
+            // 获取标题总高度（标题+分类）
+            const titleTotalHeight = titleContainer.offsetHeight;
+            // 标题最小高度设为112px（约8行文本）
+            const minHeight = 112; // 默认8行约112px
+            
+            // 设置摘要区域高度为标题高度和最小高度中的较大值
+            const summaryHeight = Math.max(titleTotalHeight, minHeight);
+            summaryDiv.style.height = `${summaryHeight}px`;
+            
+            // 同时调整作者区域的高度，使其与摘要区域高度一致
+            authorDiv.style.height = `${summaryHeight}px`;
+            
+            // 同时设置行的最小高度，确保一致性
+            const rowHeight = summaryHeight + 24; // +24是为了算上padding
+            row.style.minHeight = `${rowHeight}px`;
+
+            // 如果标题过短，强制调整其容器的最小高度也达到8行
+            if (titleTotalHeight < minHeight) {
+                titleContainer.style.minHeight = `${minHeight}px`;
+            }
+        }, 50);
+        
+        summaryCell.appendChild(summaryDiv);
+        
+        // 将所有单元格添加到行
+        row.appendChild(titleCell);
+        row.appendChild(authorCell);
+        row.appendChild(dateCell);
+        row.appendChild(linkCell);
+        row.appendChild(summaryCell);
+        
         papersTableBody.appendChild(row);
     });
 }
