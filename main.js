@@ -19,6 +19,7 @@ if (isDev) {
         'package-lock.json'
       ]
     });
+    // 恢复中文消息
     console.log('热重载已启用，正在监听文件变化...');
   } catch (err) { 
     console.error('热重载配置失败:', err); 
