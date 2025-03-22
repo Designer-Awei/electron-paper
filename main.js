@@ -1,8 +1,13 @@
 /**
  * @description Electron 主进程文件
  */
-const { app, BrowserWindow, globalShortcut } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const remote = require('@electron/remote/main');
+
+// 初始化remote模块
+remote.initialize();
 
 /**
  * @description 开发环境下启用热重载
@@ -26,12 +31,59 @@ if (isDev) {
   }
 }
 
+// 存储窗口的引用
+let mainWindow;
+
+/**
+ * @description 获取API密钥
+ * @returns {string|null} API密钥或null
+ */
+function getApiKey() {
+  try {
+    const configPath = path.join(app.getPath('userData'), 'config.json');
+    if (fs.existsSync(configPath)) {
+      const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      return configData.apiKey || null;
+    }
+  } catch (error) {
+    console.error('获取API密钥失败:', error);
+  }
+  return null;
+}
+
+/**
+ * @description 保存API密钥
+ * @param {string} apiKey - API密钥
+ * @returns {boolean} 是否保存成功
+ */
+function saveApiKey(apiKey) {
+  try {
+    const configPath = path.join(app.getPath('userData'), 'config.json');
+    let configData = {};
+    
+    // 如果配置文件已存在，读取它
+    if (fs.existsSync(configPath)) {
+      configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+    
+    // 更新API密钥
+    configData.apiKey = apiKey;
+    
+    // 保存回文件
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error('保存API密钥失败:', error);
+    return false;
+  }
+}
+
 /**
  * @description 创建主窗口
  * @returns {void}
  */
 function createWindow() {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
@@ -41,6 +93,9 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js')
     }
   });
+
+  // 启用远程模块
+  remote.enable(mainWindow.webContents);
 
   mainWindow.loadFile('index.html');
   
@@ -57,6 +112,10 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
+
+  // 设置IPC监听器
+  ipcMain.handle('get-api-key', () => getApiKey());
+  ipcMain.handle('save-api-key', (event, apiKey) => saveApiKey(apiKey));
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

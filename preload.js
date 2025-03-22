@@ -1,9 +1,12 @@
 /**
  * @description 预加载脚本，用于安全地暴露 API
  */
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
+const { app } = require('@electron/remote');
 const axios = require('axios');
 const xml2js = require('xml2js');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * @description 从arXiv获取论文数据
@@ -217,6 +220,90 @@ async function fetchArxivPapers(searchQueries, options = {}) {
     }
 }
 
+/**
+ * @description 获取API密钥
+ * @returns {Promise<string|null>} API密钥或null
+ */
+async function getApiKey() {
+    try {
+        const configPath = path.join(app.getPath('userData'), 'config.json');
+        if (fs.existsSync(configPath)) {
+            const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            return configData.apiKey || null;
+        }
+    } catch (error) {
+        console.error('获取API密钥失败:', error);
+    }
+    return null;
+}
+
+/**
+ * @description 保存API密钥
+ * @param {string} apiKey - API密钥
+ * @returns {Promise<boolean>} 是否保存成功
+ */
+async function saveApiKey(apiKey) {
+    try {
+        const configPath = path.join(app.getPath('userData'), 'config.json');
+        let configData = {};
+        
+        // 如果配置文件已存在，读取它
+        if (fs.existsSync(configPath)) {
+            configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        }
+        
+        // 更新API密钥
+        configData.apiKey = apiKey;
+        
+        // 保存回文件
+        fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+        return true;
+    } catch (error) {
+        console.error('保存API密钥失败:', error);
+        return false;
+    }
+}
+
+/**
+ * @description 使用API翻译文本
+ * @param {string} text - 要翻译的文本
+ * @param {string} apiKey - API密钥
+ * @returns {Promise<string>} 翻译后的文本
+ */
+async function translateText(text, apiKey) {
+    try {
+        // 确保文本不超过模型最大上下文长度
+        const maxLength = 12000; // 保守估计，32k的三分之一左右
+        const truncatedText = text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+        
+        const response = await axios.post('https://api.siliconflow.cn/v1/chat/completions', {
+            model: 'Qwen/Qwen2.5-7B-Instruct', // 使用默认模型
+            messages: [
+                { role: 'system', content: '你是一个专业的翻译助手，你的任务是将英文文本准确地翻译成中文，保持专业术语的准确性。只返回翻译结果，不要解释或添加任何其他内容。' },
+                { role: 'user', content: `将以下文本翻译成中文：\n\n${truncatedText}` }
+            ],
+            max_tokens: 4000
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            }
+        });
+        
+        if (response.data && response.data.choices && response.data.choices.length > 0) {
+            return response.data.choices[0].message.content;
+        }
+        
+        throw new Error('翻译API返回格式异常');
+    } catch (error) {
+        console.error('翻译失败:', error.message);
+        if (error.response) {
+            console.error('API错误:', error.response.data);
+        }
+        throw new Error('翻译失败：' + (error.response?.data?.error?.message || error.message));
+    }
+}
+
 // 暴露安全的API给渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
     versions: {
@@ -226,5 +313,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     arxiv: {
         fetchPapers: fetchArxivPapers
+    },
+    translation: {
+        getApiKey: getApiKey,
+        saveApiKey: saveApiKey,
+        translate: translateText
+    },
+    ipcRenderer: {
+        invoke: (channel, ...args) => {
+            const validChannels = ['get-api-key', 'save-api-key'];
+            if (validChannels.includes(channel)) {
+                return ipcRenderer.invoke(channel, ...args);
+            }
+            throw new Error(`不允许调用 ${channel}`);
+        }
     }
 }); 

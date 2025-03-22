@@ -29,6 +29,28 @@ const prevPage = document.getElementById('prevPage');
 const nextPage = document.getElementById('nextPage');
 const pageInfo = document.getElementById('pageInfo');
 
+// 获取标签页相关DOM元素
+const mainSearchTab = document.getElementById('mainSearchTab');
+const historySearchTab = document.getElementById('historySearchTab');
+const favoritesTab = document.getElementById('favoritesTab');
+const settingsTab = document.getElementById('settingsTab');
+const mainSearchContainer = document.getElementById('mainSearchContainer');
+const historyContainer = document.getElementById('historyContainer');
+const favoritesContainer = document.getElementById('favoritesContainer');
+const settingsContainer = document.getElementById('settingsContainer');
+
+// 获取设置相关的DOM元素
+const translateButton = document.getElementById('translateButton');
+const apiKeyModal = document.getElementById('apiKeyModal');
+const apiKeyInput = document.getElementById('apiKeyInput');
+const saveApiKeyButton = document.getElementById('saveApiKey');
+const cancelApiKeyButton = document.getElementById('cancelApiKey');
+const closeModalButton = document.getElementById('closeModal');
+const settingsApiKey = document.getElementById('settingsApiKey');
+const settingsModelSelection = document.getElementById('settingsModelSelection');
+const saveSettingsButton = document.getElementById('saveSettingsButton');
+const settingsStatusMessage = document.getElementById('settingsStatusMessage');
+
 // 当前页码和每页数量
 let currentPage = 1;
 let totalResults = 0;
@@ -37,6 +59,11 @@ let apiTotalResults = 0; // 添加API返回的原始总结果数变量
 // 添加变量来存储所有获取到的论文和全局状态
 let allPapers = []; // 存储所有获取到的论文
 let userLimitedTotal = 0; // 用户限制的总论文数
+
+// 翻译相关的状态
+let isTranslated = false; // 当前是否处于翻译状态
+let originalPapers = []; // 存储原始论文数据
+let currentApiKey = ''; // 存储当前API密钥
 
 /**
  * @description 获取日期范围
@@ -1133,3 +1160,319 @@ function renderFavorites() {
         favoritesList.appendChild(favoriteItem);
     });
 }
+
+/**
+ * @description 显示API密钥输入弹窗
+ */
+function showApiKeyModal() {
+    apiKeyModal.style.display = 'block';
+}
+
+/**
+ * @description 隐藏API密钥输入弹窗
+ */
+function hideApiKeyModal() {
+    apiKeyModal.style.display = 'none';
+}
+
+/**
+ * @description 保存API密钥
+ */
+async function saveApiKey() {
+    const key = apiKeyInput.value.trim();
+    if (!key) {
+        alert('请输入有效的API密钥');
+        return;
+    }
+    
+    try {
+        const success = await window.electronAPI.translation.saveApiKey(key);
+        if (success) {
+            currentApiKey = key;
+            hideApiKeyModal();
+            toggleTranslation(); // 保存成功后继续翻译
+        } else {
+            alert('保存API密钥失败');
+        }
+    } catch (error) {
+        console.error('保存API密钥时出错:', error);
+        alert('保存API密钥时出错: ' + error.message);
+    }
+}
+
+/**
+ * @description 获取API密钥
+ */
+async function getApiKey() {
+    try {
+        const key = await window.electronAPI.translation.getApiKey();
+        currentApiKey = key;
+        return key;
+    } catch (error) {
+        console.error('获取API密钥时出错:', error);
+        return null;
+    }
+}
+
+/**
+ * @description 翻译文本
+ * @param {string} text - 待翻译的文本
+ * @returns {Promise<string>} 翻译后的文本
+ */
+async function translateText(text) {
+    try {
+        return await window.electronAPI.translation.translate(text, currentApiKey);
+    } catch (error) {
+        console.error('翻译失败:', error);
+        throw error;
+    }
+}
+
+/**
+ * @description 翻译论文数据
+ * @param {Array} papers - 论文数组
+ * @returns {Promise<Array>} 翻译后的论文数组
+ */
+async function translatePapers(papers) {
+    loadingDiv.style.display = 'block';
+    loadingDiv.textContent = '正在翻译...';
+    
+    try {
+        const translatedPapers = [...papers]; // 复制论文数组
+        
+        // 构建翻译批量请求
+        const batchPromises = papers.map(async (paper, index) => {
+            try {
+                // 翻译标题
+                const titlePromise = translateText(paper.title);
+                
+                // 翻译摘要
+                const summaryPromise = translateText(paper.summary);
+                
+                // 等待两个翻译完成
+                const [translatedTitle, translatedSummary] = await Promise.all([titlePromise, summaryPromise]);
+                
+                // 更新论文数据
+                translatedPapers[index] = {
+                    ...paper,
+                    title: translatedTitle,
+                    summary: translatedSummary,
+                    isTranslated: true
+                };
+                
+                // 更新加载状态
+                loadingDiv.textContent = `正在翻译... (${index + 1}/${papers.length})`;
+                
+                return true;
+            } catch (error) {
+                console.error(`翻译论文 ${index + 1} 失败:`, error);
+                return false;
+            }
+        });
+        
+        // 等待所有翻译完成
+        await Promise.all(batchPromises);
+        
+        return translatedPapers;
+    } catch (error) {
+        console.error('批量翻译失败:', error);
+        throw error;
+    } finally {
+        loadingDiv.style.display = 'none';
+    }
+}
+
+/**
+ * @description 切换翻译状态
+ */
+async function toggleTranslation() {
+    try {
+        // 如果没有论文数据，不执行任何操作
+        if (allPapers.length === 0) {
+            alert('没有可翻译的论文数据');
+            return;
+        }
+        
+        // 检查是否已经有API密钥
+        if (!currentApiKey) {
+            currentApiKey = await getApiKey();
+            
+            // 如果仍然没有API密钥，显示输入弹窗
+            if (!currentApiKey) {
+                showApiKeyModal();
+                return;
+            }
+        }
+        
+        if (!isTranslated) {
+            // 保存原始数据
+            originalPapers = JSON.parse(JSON.stringify(allPapers));
+            
+            // 执行翻译
+            translateButton.disabled = true;
+            const translatedPapers = await translatePapers(allPapers);
+            allPapers = translatedPapers;
+            
+            // 更新UI状态
+            isTranslated = true;
+            translateButton.textContent = '原文';
+            translateButton.classList.add('active');
+            
+            // 重新渲染
+            renderPapers();
+        } else {
+            // 恢复原始数据
+            allPapers = originalPapers;
+            originalPapers = [];
+            
+            // 更新UI状态
+            isTranslated = false;
+            translateButton.textContent = '翻译';
+            translateButton.classList.remove('active');
+            
+            // 重新渲染
+            renderPapers();
+        }
+    } catch (error) {
+        console.error('切换翻译失败:', error);
+        alert('翻译失败: ' + error.message);
+    } finally {
+        translateButton.disabled = false;
+    }
+}
+
+/**
+ * @description 显示状态消息
+ * @param {HTMLElement} element - 状态消息元素
+ * @param {string} message - 消息内容
+ * @param {string} type - 消息类型（success 或 error）
+ */
+function showStatusMessage(element, message, type) {
+    element.textContent = message;
+    element.className = 'status-message ' + type;
+    element.style.display = 'block';
+    
+    // 5秒后自动隐藏
+    setTimeout(() => {
+        element.style.display = 'none';
+    }, 5000);
+}
+
+/**
+ * @description 保存设置
+ */
+async function saveSettings() {
+    try {
+        const apiKey = settingsApiKey.value.trim();
+        if (!apiKey) {
+            showStatusMessage(settingsStatusMessage, '请输入有效的 API 密钥', 'error');
+            return;
+        }
+        
+        const success = await window.electronAPI.translation.saveApiKey(apiKey);
+        if (success) {
+            showStatusMessage(settingsStatusMessage, '设置已保存', 'success');
+            // 更新全局API密钥
+            currentApiKey = apiKey;
+        } else {
+            showStatusMessage(settingsStatusMessage, '保存设置失败', 'error');
+        }
+    } catch (error) {
+        console.error('保存设置失败:', error);
+        showStatusMessage(settingsStatusMessage, '保存设置失败: ' + error.message, 'error');
+    }
+}
+
+/**
+ * @description 加载设置
+ */
+async function loadSettings() {
+    try {
+        const key = await window.electronAPI.translation.getApiKey();
+        if (key) {
+            settingsApiKey.value = key;
+        }
+    } catch (error) {
+        console.error('加载设置失败:', error);
+        showStatusMessage(settingsStatusMessage, '加载设置失败: ' + error.message, 'error');
+    }
+}
+
+// 添加标签页切换逻辑
+mainSearchTab.addEventListener('click', () => {
+    mainSearchTab.classList.add('active');
+    historySearchTab.classList.remove('active');
+    favoritesTab.classList.remove('active');
+    settingsTab.classList.remove('active');
+    
+    mainSearchContainer.style.display = 'block';
+    historyContainer.style.display = 'none';
+    favoritesContainer.style.display = 'none';
+    settingsContainer.style.display = 'none';
+});
+
+historySearchTab.addEventListener('click', () => {
+    mainSearchTab.classList.remove('active');
+    historySearchTab.classList.add('active');
+    favoritesTab.classList.remove('active');
+    settingsTab.classList.remove('active');
+    
+    mainSearchContainer.style.display = 'none';
+    historyContainer.style.display = 'block';
+    favoritesContainer.style.display = 'none';
+    settingsContainer.style.display = 'none';
+    
+    renderSearchHistory();
+});
+
+favoritesTab.addEventListener('click', () => {
+    mainSearchTab.classList.remove('active');
+    historySearchTab.classList.remove('active');
+    favoritesTab.classList.add('active');
+    settingsTab.classList.remove('active');
+    
+    mainSearchContainer.style.display = 'none';
+    historyContainer.style.display = 'none';
+    favoritesContainer.style.display = 'block';
+    settingsContainer.style.display = 'none';
+    
+    renderFavorites();
+});
+
+settingsTab.addEventListener('click', () => {
+    mainSearchTab.classList.remove('active');
+    historySearchTab.classList.remove('active');
+    favoritesTab.classList.remove('active');
+    settingsTab.classList.add('active');
+    
+    mainSearchContainer.style.display = 'none';
+    historyContainer.style.display = 'none';
+    favoritesContainer.style.display = 'none';
+    settingsContainer.style.display = 'block';
+    
+    loadSettings();
+});
+
+// 保存设置按钮事件
+saveSettingsButton.addEventListener('click', saveSettings);
+
+// 修改之前的openSettings函数
+async function openSettings() {
+    settingsTab.click();
+}
+
+// 添加事件监听器
+translateButton.addEventListener('click', toggleTranslation);
+saveApiKeyButton.addEventListener('click', saveApiKey);
+cancelApiKeyButton.addEventListener('click', hideApiKeyModal);
+closeModalButton.addEventListener('click', hideApiKeyModal);
+
+// 当窗口点击时，如果点击的是模态框外部，则关闭模态框
+window.addEventListener('click', (event) => {
+    if (event.target === apiKeyModal) {
+        hideApiKeyModal();
+    }
+});
+
+// 加载API密钥
+getApiKey();
