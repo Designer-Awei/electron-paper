@@ -499,7 +499,8 @@
         /* 导航栏样式 */
         .nav-tabs {
             display: flex;
-            margin-bottom: 24px;
+            margin-bottom: 16px; /* 从24px减少到16px */
+            margin-top: 0; /* 确保没有上边距 */
             border-bottom: 2px solid #e0e0e0;
             position: relative;
             width: 100%;
@@ -620,7 +621,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 10px; /* 从20px减少到10px */
             border-bottom: 1px solid #eee;
             padding-bottom: 10px;
         }
@@ -628,6 +629,11 @@
         .nav-left {
             display: flex;
             align-items: center;
+        }
+        
+        .nav-left h1 {
+            margin: 0; /* 移除h1默认的边距 */
+            font-size: 22px; /* 稍微调整字体大小 */
         }
         
         .nav-right {
