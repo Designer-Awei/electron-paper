@@ -37,6 +37,7 @@
             position: relative;
             box-sizing: border-box;
             flex-wrap: nowrap;
+            margin-bottom: 8px;
         }
         .search-group {
             display: grid;
@@ -282,10 +283,11 @@
         #additionalFields {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
             width: 100%;
             position: relative;
             overflow-x: hidden;
+            margin-bottom: 8px;
         }
         table {
             width: 100%;
@@ -397,11 +399,31 @@
         }
         .search-options {
             display: flex;
+            align-items: flex-start; /* 从顶部对齐，便于垂直堆叠 */
+            gap: 16px; /* 增加间距 */
+            flex-wrap: wrap; /* 允许换行 */
+            justify-content: space-between; /* 两端对齐 */
+            margin-top: 16px;
+        }
+        
+        /* 添加过滤器选择容器，确保不换行 */
+        .filter-row {
+            display: flex;
             align-items: center;
             gap: 12px;
-            flex-wrap: wrap;
-            justify-content: space-between;
+            white-space: nowrap;
+            flex-wrap: nowrap;
+            min-width: 380px;
+            flex-shrink: 0; /* 防止缩小 */
+            overflow-x: auto; /* 当空间不足时允许滚动 */
+            padding-bottom: 2px; /* 为可能的滚动条预留空间 */
+            width: auto; /* 让宽度自适应内容 */
         }
+        
+        .filter-row select {
+            flex-shrink: 0; /* 防止选择器被压缩 */
+        }
+        
         input.search-input {
             min-width: 0;
             width: 100%;
@@ -577,6 +599,18 @@
             color: #ffc107;
             font-size: 20px;
         }
+        
+        /* 在窄屏幕下调整搜索选项布局 */
+        @media (max-width: 768px) {
+            .search-options {
+                flex-direction: column; /* 窄屏幕下垂直排列 */
+                align-items: stretch; /* 拉伸子元素填充容器 */
+            }
+            
+            .control-group {
+                margin-top: 8px; /* 添加上边距 */
+            }
+        }
     </style>
 </head>
 <body>
@@ -613,14 +647,14 @@
         </div>
         <div id="additionalFields"></div>
         <div class="search-options">
-            <select id="timeRange">
-                <option value="all_time">所有时间</option>
-                <option value="last_month" selected>最近一个月</option>
-                <option value="last_3_months">最近三个月</option>
-                <option value="last_6_months">最近六个月</option>
-                <option value="last_year">最近一年</option>
-            </select>
-            <div class="sort-group">
+            <div class="filter-row">
+                <select id="timeRange">
+                    <option value="all_time">所有时间</option>
+                    <option value="last_month" selected>最近一个月</option>
+                    <option value="last_3_months">最近三个月</option>
+                    <option value="last_6_months">最近六个月</option>
+                    <option value="last_year">最近一年</option>
+                </select>
                 <select id="sortBy">
                     <option value="submittedDate">提交日期</option>
                     <option value="relevance">相关度</option>
