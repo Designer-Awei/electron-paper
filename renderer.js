@@ -77,6 +77,7 @@ function getDateRange() {
 function createSearchFieldRow() {
     const fieldRow = document.createElement('div');
     fieldRow.className = 'field-row';
+    fieldRow.style.marginBottom = '0px'; // 设置为0以消除额外间距
     
     // 创建一个关系运算符选择器（AND/OR/NOT）
     const operatorSelect = document.createElement('select');

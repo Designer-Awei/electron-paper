@@ -37,7 +37,7 @@
             position: relative;
             box-sizing: border-box;
             flex-wrap: nowrap;
-            margin-bottom: 4px;
+            margin-bottom: 0;
         }
         .search-group {
             display: grid;
@@ -279,11 +279,18 @@
         #additionalFields {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 0px; /* 将行间距设为0 */
             width: 100%;
             position: relative;
             overflow-x: hidden;
-            margin-bottom: 8px;
+            margin-bottom: 4px; /* 与其他元素保持一致的底部间距 */
+        }
+        #additionalFields .field-row {
+            margin-top: 4px; /* 每个字段行顶部添加4px间距 */
+            margin-bottom: 0; /* 重置底部间距 */
+        }
+        #additionalFields .field-row:first-child {
+            margin-top: 2px; /* 从4px减小到2px，使第一个字段与主搜索框更近 */
         }
         table {
             width: 100%;
@@ -619,7 +626,7 @@
     </div>
     
     <div id="mainSearchContainer" class="search-container">
-        <div class="search-row" style="flex-wrap: nowrap; overflow-x: auto;">
+        <div class="search-row" style="flex-wrap: nowrap; overflow-x: auto; margin-bottom: 2px;">
             <div class="search-group">
                 <select id="searchField">
                     <option value="all">所有字段</option>
@@ -641,8 +648,8 @@
                 <button class="secondary-button" id="addFieldBtn">添加字段</button>
             </div>
         </div>
-        <div id="additionalFields"></div>
-        <div class="search-options">
+        <div id="additionalFields" style="margin-bottom: 4px;"></div>
+        <div class="search-options" style="margin-top: 0px;">
             <div class="filter-row">
                 <select id="timeRange">
                     <option value="all_time">所有时间</option>
