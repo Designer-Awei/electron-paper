@@ -7,12 +7,18 @@ const path = require('path');
 /**
  * @description 开发环境下启用热重载
  */
-try {
-  require('electron-reloader')(module, {
-    debug: true,
-    watchRenderer: true
-  });
-} catch (_) { console.log('Error'); }
+const isDev = process.env.NODE_ENV === 'development';
+if (isDev) {
+  try {
+    require('electron-reloader')(module, {
+      debug: true,
+      watchRenderer: true
+    });
+    console.log('热重载已启用');
+  } catch (err) { 
+    console.error('热重载配置失败:', err); 
+  }
+}
 
 /**
  * @description 创建主窗口
@@ -32,8 +38,10 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
   
-  // 打开开发者工具
-  mainWindow.webContents.openDevTools();
+  // 只在开发模式下自动打开开发者工具
+  if (isDev) {
+    mainWindow.webContents.openDevTools();
+  }
 
   // 注册 F12 快捷键
   globalShortcut.register('F12', () => {
