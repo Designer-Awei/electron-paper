@@ -159,6 +159,35 @@ function getSearchQueries() {
     return queries;
 }
 
+// 在搜索函数中添加保存历史记录的逻辑
+const originalSearchPapers = window.searchPapers;
+// 添加标志位，表示当前搜索是否来自历史记录应用
+let isApplyingFromHistory = false;
+
+window.searchPapers = async function() {
+    // 获取当前搜索条件
+    const searchData = {
+        searchField: document.getElementById('searchField').value,
+        searchInput: document.getElementById('searchInput').value,
+        timeRange: document.getElementById('timeRange').value,
+        sortBy: document.getElementById('sortBy').value,
+        sortOrder: document.getElementById('sortOrder').value,
+        maxResults: document.getElementById('maxResults').value,
+        additionalFields: [] // 需要根据实际情况获取额外字段
+    };
+    
+    // 只有当不是从历史记录应用时，才添加到历史记录
+    if (!isApplyingFromHistory) {
+        addToHistory(searchData);
+    }
+    
+    // 重置标志位
+    isApplyingFromHistory = false;
+    
+    // 调用原始搜索函数
+    return await originalSearchPapers();
+};
+
 /**
  * @description 搜索论文
  */
@@ -543,4 +572,191 @@ searchButton.addEventListener('click', () => {
     console.log('点击搜索按钮，开始搜索');
     currentPage = 1; // 重置页码
     searchPapers();
+});
+
+/**
+ * @description 搜索历史管理
+ */
+const HISTORY_KEY = 'arxiv_search_history';
+const MAX_HISTORY_ITEMS = 10;
+
+/**
+ * @description 获取搜索历史
+ * @returns {Array} 搜索历史数组
+ */
+function getSearchHistory() {
+    const history = localStorage.getItem(HISTORY_KEY);
+    return history ? JSON.parse(history) : [];
+}
+
+/**
+ * @description 保存搜索历史
+ * @param {Array} history 搜索历史数组
+ */
+function saveSearchHistory(history) {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+/**
+ * @description 添加搜索记录到历史
+ * @param {Object} searchData 搜索条件数据
+ */
+function addToHistory(searchData) {
+    const history = getSearchHistory();
+    const newEntry = {
+        ...searchData,
+        timestamp: new Date().toISOString(),
+        id: Date.now()
+    };
+    
+    // 添加到历史记录开头
+    history.unshift(newEntry);
+    
+    // 限制历史记录数量
+    if (history.length > MAX_HISTORY_ITEMS) {
+        history.pop();
+    }
+    
+    saveSearchHistory(history);
+    renderSearchHistory();
+}
+
+/**
+ * @description 从历史记录中删除指定项
+ * @param {number} id 历史记录ID
+ */
+function removeFromHistory(id) {
+    const history = getSearchHistory();
+    const newHistory = history.filter(item => item.id !== id);
+    saveSearchHistory(newHistory);
+    renderSearchHistory();
+}
+
+/**
+ * @description 清空所有历史记录
+ */
+function clearHistory() {
+    localStorage.removeItem(HISTORY_KEY);
+    renderSearchHistory();
+}
+
+/**
+ * @description 应用历史记录中的搜索条件
+ * @param {Object} historyItem 历史记录项
+ */
+function applyHistorySearch(historyItem) {
+    // 设置标志位，表示当前搜索来自历史记录应用
+    isApplyingFromHistory = true;
+    
+    // 设置搜索字段
+    document.getElementById('searchField').value = historyItem.searchField;
+    document.getElementById('searchInput').value = historyItem.searchInput;
+    
+    // 设置时间范围
+    document.getElementById('timeRange').value = historyItem.timeRange;
+    
+    // 设置排序条件
+    document.getElementById('sortBy').value = historyItem.sortBy;
+    document.getElementById('sortOrder').value = historyItem.sortOrder;
+    
+    // 设置结果限制
+    document.getElementById('maxResults').value = historyItem.maxResults;
+    
+    // 如果有额外的搜索字段，重新创建它们
+    if (historyItem.additionalFields) {
+        const additionalFieldsContainer = document.getElementById('additionalFields');
+        additionalFieldsContainer.innerHTML = '';
+        
+        historyItem.additionalFields.forEach(field => {
+            // 创建额外的搜索字段
+            // ... 这部分代码需要与原有的添加字段功能保持一致
+        });
+    }
+    
+    // 执行搜索
+    searchPapers();
+}
+
+/**
+ * @description 渲染搜索历史列表
+ */
+function renderSearchHistory() {
+    const historyList = document.getElementById('historyList');
+    const history = getSearchHistory();
+    
+    if (history.length === 0) {
+        historyList.innerHTML = '<div class="history-item">暂无搜索历史</div>';
+        return;
+    }
+    
+    historyList.innerHTML = '';
+    
+    history.forEach(item => {
+        const historyItem = document.createElement('div');
+        historyItem.className = 'history-item';
+        
+        // 创建内容区域
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'history-content';
+        
+        const queryDiv = document.createElement('div');
+        queryDiv.className = 'history-query';
+        queryDiv.textContent = item.searchInput;
+        
+        const conditionsDiv = document.createElement('div');
+        conditionsDiv.className = 'history-conditions';
+        conditionsDiv.textContent = `搜索字段: ${item.searchField} | 时间范围: ${item.timeRange} | 排序: ${item.sortBy} ${item.sortOrder} | 结果数: ${item.maxResults}`;
+        
+        const dateDiv = document.createElement('div');
+        dateDiv.className = 'history-date';
+        dateDiv.textContent = new Date(item.timestamp).toLocaleString();
+        
+        contentDiv.appendChild(queryDiv);
+        contentDiv.appendChild(conditionsDiv);
+        contentDiv.appendChild(dateDiv);
+        
+        // 创建操作按钮区域
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'history-actions';
+        
+        const applyButton = document.createElement('button');
+        applyButton.className = 'secondary-button';
+        applyButton.textContent = '应用';
+        applyButton.dataset.itemId = item.id;
+        applyButton.addEventListener('click', function() {
+            const historyItem = history.find(h => h.id === parseInt(this.dataset.itemId));
+            if (historyItem) {
+                applyHistorySearch(historyItem);
+            }
+        });
+        
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'danger-button';
+        deleteButton.textContent = '删除';
+        deleteButton.dataset.itemId = item.id;
+        deleteButton.addEventListener('click', function() {
+            removeFromHistory(parseInt(this.dataset.itemId));
+        });
+        
+        actionsDiv.appendChild(applyButton);
+        actionsDiv.appendChild(deleteButton);
+        
+        historyItem.appendChild(contentDiv);
+        historyItem.appendChild(actionsDiv);
+        
+        historyList.appendChild(historyItem);
+    });
+}
+
+// 初始化事件监听
+document.addEventListener('DOMContentLoaded', () => {
+    // 渲染历史记录
+    renderSearchHistory();
+    
+    // 清空历史按钮事件
+    document.getElementById('clearHistory').addEventListener('click', () => {
+        if (confirm('确定要清空所有搜索历史吗？')) {
+            clearHistory();
+        }
+    });
 });

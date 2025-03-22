@@ -12,9 +12,14 @@ if (isDev) {
   try {
     require('electron-reloader')(module, {
       debug: true,
-      watchRenderer: true
+      watchRenderer: true,
+      ignore: [
+        'node_modules/**/*',
+        'package.json',
+        'package-lock.json'
+      ]
     });
-    console.log('热重载已启用');
+    console.log('热重载已启用，正在监听文件变化...');
   } catch (err) { 
     console.error('热重载配置失败:', err); 
   }
