@@ -66,11 +66,13 @@
         .button-container {
             display: flex;
             justify-content: center;
+            align-items: center;
             width: 112px;
             min-width: 112px;
-            margin-left: 12px;
-            box-sizing: border-box;
+            max-width: 112px;
+            height: 36px;
             flex-shrink: 0;
+            margin: 0;
         }
         /* 媒体查询 - 当屏幕变窄时调整布局 */
         @media (max-width: 768px) {
@@ -201,25 +203,28 @@
             font-weight: 500;
             transition: all 0.2s ease;
         }
+        .primary-button, .secondary-button {
+            width: 112px; /* 固定宽度 */
+            height: 36px; /* 固定高度 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            box-sizing: border-box;
+            border-radius: 6px;
+            padding: 0;
+        }
         .primary-button {
             background-color: #1a73e8;
             color: white;
-            padding: 10px 20px;
-            font-size: 14px;
         }
         .primary-button:hover {
             background-color: #0d62d1;
         }
         .secondary-button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
             background-color: #f0f0f0;
             color: #333;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            margin-right: 8px;
+            margin-right: 0; /* 移除右边距 */
         }
         .secondary-button:hover {
             background-color: #e0e0e0;
@@ -626,12 +631,12 @@
                     <option value="ascending">升序</option>
                 </select>
             </div>
-            <div class="control-group">
-                <div class="results-per-page">
+            <div class="control-group" style="gap: 12px;">
+                <div class="results-per-page" style="margin-right: 0;">
                     <span>结果限制</span>
                     <input type="number" id="maxResults" min="1" max="100" value="40">
                 </div>
-                <div class="button-container" style="margin-left: 12px; width: 112px; min-width: 112px;">
+                <div class="button-container" style="margin-left: 0;">
                     <button class="primary-button" id="searchButton">搜索</button>
                 </div>
             </div>
