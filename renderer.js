@@ -1450,6 +1450,9 @@ settingsTab.addEventListener('click', () => {
     favoritesContainer.style.display = 'none';
     settingsContainer.style.display = 'block';
     
+    // 隐藏搜索结果区域
+    document.getElementById('mainSearchResults').style.display = 'none';
+    
     loadSettings();
 });
 
