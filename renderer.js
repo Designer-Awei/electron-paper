@@ -173,8 +173,20 @@ window.searchPapers = async function() {
         sortBy: document.getElementById('sortBy').value,
         sortOrder: document.getElementById('sortOrder').value,
         maxResults: document.getElementById('maxResults').value,
-        additionalFields: [] // 需要根据实际情况获取额外字段
+        additionalFields: [] // 需要收集额外字段
     };
+    
+    // 收集额外搜索字段
+    const fieldRows = document.getElementById('additionalFields').getElementsByClassName('field-row');
+    Array.from(fieldRows).forEach(row => {
+        const field = row.querySelector('.search-field').value;
+        const term = row.querySelector('.search-input').value.trim();
+        const operator = row.querySelector('.search-operator').value;
+        
+        if (term) {  // 只添加非空的搜索条件
+            searchData.additionalFields.push({ field, term, operator });
+        }
+    });
     
     // 只有当不是从历史记录应用时，才添加到历史记录
     if (!isApplyingFromHistory) {
@@ -556,6 +568,44 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 更新分页状态
     updatePagination();
+    
+    // 渲染历史记录
+    renderSearchHistory();
+    
+    // 清空历史按钮事件
+    document.getElementById('clearHistory').addEventListener('click', () => {
+        if (confirm('确定要清空所有搜索历史吗？')) {
+            clearHistory();
+        }
+    });
+    
+    // 添加导航栏切换事件
+    const mainSearchTab = document.getElementById('mainSearchTab');
+    const historySearchTab = document.getElementById('historySearchTab');
+    const mainSearchContainer = document.getElementById('mainSearchContainer');
+    const historyContainer = document.getElementById('historyContainer');
+    const mainSearchResults = document.getElementById('mainSearchResults');
+    
+    mainSearchTab.addEventListener('click', () => {
+        // 切换到主搜索界面
+        mainSearchTab.classList.add('active');
+        historySearchTab.classList.remove('active');
+        mainSearchContainer.style.display = 'block';
+        mainSearchResults.style.display = 'block';
+        historyContainer.style.display = 'none';
+    });
+    
+    historySearchTab.addEventListener('click', () => {
+        // 切换到历史搜索界面
+        historySearchTab.classList.add('active');
+        mainSearchTab.classList.remove('active');
+        historyContainer.style.display = 'block';
+        mainSearchContainer.style.display = 'none';
+        mainSearchResults.style.display = 'none';
+        
+        // 刷新历史记录显示
+        renderSearchHistory();
+    });
 });
 
 // 监听回车键
@@ -662,16 +712,32 @@ function applyHistorySearch(historyItem) {
     // 设置结果限制
     document.getElementById('maxResults').value = historyItem.maxResults;
     
+    // 清空额外字段容器
+    const additionalFieldsContainer = document.getElementById('additionalFields');
+    additionalFieldsContainer.innerHTML = '';
+    
     // 如果有额外的搜索字段，重新创建它们
-    if (historyItem.additionalFields) {
-        const additionalFieldsContainer = document.getElementById('additionalFields');
-        additionalFieldsContainer.innerHTML = '';
-        
+    if (historyItem.additionalFields && historyItem.additionalFields.length > 0) {
         historyItem.additionalFields.forEach(field => {
-            // 创建额外的搜索字段
-            // ... 这部分代码需要与原有的添加字段功能保持一致
+            // 创建新的搜索字段行
+            const fieldRow = createSearchFieldRow();
+            
+            // 设置搜索字段值
+            const fieldSelect = fieldRow.querySelector('.search-field');
+            const fieldInput = fieldRow.querySelector('.search-input');
+            const fieldOperator = fieldRow.querySelector('.search-operator');
+            
+            if (fieldSelect) fieldSelect.value = field.field;
+            if (fieldInput) fieldInput.value = field.term;
+            if (fieldOperator) fieldOperator.value = field.operator;
+            
+            // 添加到额外字段容器
+            additionalFieldsContainer.appendChild(fieldRow);
         });
     }
+    
+    // 切换到主搜索界面
+    document.getElementById('mainSearchTab').click();
     
     // 执行搜索
     searchPapers();
@@ -694,14 +760,35 @@ function renderSearchHistory() {
     history.forEach(item => {
         const historyItem = document.createElement('div');
         historyItem.className = 'history-item';
+        historyItem.style.cursor = 'pointer';
+        
+        // 为整个历史记录项添加点击事件
+        historyItem.addEventListener('click', function() {
+            const historyItemObj = history.find(h => h.id === item.id);
+            if (historyItemObj) {
+                applyHistorySearch(historyItemObj);
+            }
+        });
         
         // 创建内容区域
         const contentDiv = document.createElement('div');
         contentDiv.className = 'history-content';
         
+        // 构建显示的搜索条件文本
         const queryDiv = document.createElement('div');
         queryDiv.className = 'history-query';
-        queryDiv.textContent = item.searchInput;
+        
+        // 显示主搜索字段
+        let queryText = `${item.searchInput}`;
+        
+        // 如果有额外字段，添加到查询文本中
+        if (item.additionalFields && item.additionalFields.length > 0) {
+            item.additionalFields.forEach(field => {
+                queryText += ` ${field.operator} ${field.field}:${field.term}`;
+            });
+        }
+        
+        queryDiv.textContent = queryText;
         
         const conditionsDiv = document.createElement('div');
         conditionsDiv.className = 'history-conditions';
@@ -734,7 +821,9 @@ function renderSearchHistory() {
         deleteButton.className = 'danger-button';
         deleteButton.textContent = '删除';
         deleteButton.dataset.itemId = item.id;
-        deleteButton.addEventListener('click', function() {
+        deleteButton.addEventListener('click', function(event) {
+            // 阻止事件冒泡，避免触发其他点击事件
+            event.stopPropagation();
             removeFromHistory(parseInt(this.dataset.itemId));
         });
         
@@ -747,16 +836,3 @@ function renderSearchHistory() {
         historyList.appendChild(historyItem);
     });
 }
-
-// 初始化事件监听
-document.addEventListener('DOMContentLoaded', () => {
-    // 渲染历史记录
-    renderSearchHistory();
-    
-    // 清空历史按钮事件
-    document.getElementById('clearHistory').addEventListener('click', () => {
-        if (confirm('确定要清空所有搜索历史吗？')) {
-            clearHistory();
-        }
-    });
-});

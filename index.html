@@ -404,18 +404,11 @@
             width: 100%;
         }
         /* 历史搜索样式 */
-        .history-container {
-            margin-top: 20px;
-            background-color: #f8f9fa;
-            padding: 16px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
         .history-title {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 600;
             color: #333;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -423,21 +416,22 @@
         .history-list {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 12px;
         }
         .history-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px;
+            padding: 16px;
             background-color: white;
             border: 1px solid #e9ecef;
-            border-radius: 6px;
+            border-radius: 8px;
             transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         .history-item:hover {
             border-color: #4CAF50;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
         }
         .history-content {
             flex: 1;
@@ -472,11 +466,55 @@
         .clear-history:hover {
             background-color: #fee2e2;
         }
+        
+        /* 导航栏样式 */
+        .nav-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #dee2e6;
+            gap: 2px;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        .nav-tab {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            bottom: -1px;
+            flex-shrink: 0;
+        }
+        .nav-tab:hover {
+            background-color: #e9ecef;
+        }
+        .nav-tab.active {
+            background-color: #fff;
+            border-bottom: 1px solid #fff;
+            font-weight: 600;
+            color: #4CAF50;
+        }
+        
+        input.search-input {
+            min-width: 0;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
     <h1>arXiv 论文搜索</h1>
-    <div class="search-container">
+    
+    <div class="nav-tabs">
+        <button class="nav-tab active" id="mainSearchTab">主搜索</button>
+        <button class="nav-tab" id="historySearchTab">历史搜索</button>
+    </div>
+    
+    <div id="mainSearchContainer" class="search-container">
         <div class="search-row" style="flex-wrap: nowrap; overflow-x: auto;">
             <div class="search-group">
                 <select id="searchField">
@@ -530,35 +568,40 @@
             </div>
         </div>
     </div>
-    <div class="history-container">
+
+    <div id="historyContainer" class="search-container" style="display: none;">
         <div class="history-title">
-            <span>历史搜索</span>
+            <span>历史搜索记录</span>
             <button class="clear-history" id="clearHistory">清空历史</button>
         </div>
+        <p class="history-tip" style="margin-top: 0; margin-bottom: 16px; color: #666; font-size: 14px;">点击记录可应用搜索条件并返回主搜索页面</p>
         <div class="history-list" id="historyList">
             <!-- 历史记录将通过 JavaScript 动态插入 -->
         </div>
     </div>
-    <div class="pagination">
-        <button id="prevPage" disabled>上一页</button>
-        <span id="pageInfo">第 1 页</span>
-        <button id="nextPage">下一页</button>
+
+    <div id="mainSearchResults">
+        <div class="pagination">
+            <button id="prevPage" disabled>上一页</button>
+            <span id="pageInfo">第 1 页</span>
+            <button id="nextPage">下一页</button>
+        </div>
+        <div id="loading" class="loading">正在加载...</div>
+        <div id="error" class="error"></div>
+        <table id="papersTable">
+            <thead>
+                <tr>
+                    <th>标题</th>
+                    <th>作者</th>
+                    <th>发布日期</th>
+                    <th>链接</th>
+                    <th>摘要</th>
+                </tr>
+            </thead>
+            <tbody id="papersTableBody">
+            </tbody>
+        </table>
     </div>
-    <div id="loading" class="loading">正在加载...</div>
-    <div id="error" class="error"></div>
-    <table id="papersTable">
-        <thead>
-            <tr>
-                <th>标题</th>
-                <th>作者</th>
-                <th>发布日期</th>
-                <th>链接</th>
-                <th>摘要</th>
-            </tr>
-        </thead>
-        <tbody id="papersTableBody">
-        </tbody>
-    </table>
     <script src="./renderer.js"></script>
 </body>
 </html> 
