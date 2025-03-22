@@ -188,16 +188,22 @@ window.searchPapers = async function() {
         }
     });
     
-    // 只有当不是从历史记录应用时，才添加到历史记录
-    if (!isApplyingFromHistory) {
-        addToHistory(searchData);
+    // 暂存搜索数据，但先不添加到历史记录
+    // 我们会在搜索结果返回后，只有在有结果时才添加
+    const tempSearchData = {...searchData};
+    
+    // 调用原始搜索函数
+    const result = await originalSearchPapers();
+    
+    // 只有在搜索结果有效且不是从历史记录应用时，才添加到历史记录
+    if (!isApplyingFromHistory && allPapers && allPapers.length > 0) {
+        addToHistory(tempSearchData);
     }
     
     // 重置标志位
     isApplyingFromHistory = false;
     
-    // 调用原始搜索函数
-    return await originalSearchPapers();
+    return result;
 };
 
 /**
@@ -300,6 +306,13 @@ async function searchPapers() {
             // 渲染当前页的论文数据
             renderPapers();
         }
+        
+        // 返回搜索结果，以便上层函数决定是否保存历史记录
+        return {
+            success: true,
+            resultsCount: allPapers.length,
+            apiTotalResults: apiTotalResults
+        };
     } catch (error) {
         console.error('搜索论文失败:', error);
         errorDiv.textContent = '搜索论文失败: ' + (error.message || '未知错误');
@@ -310,6 +323,12 @@ async function searchPapers() {
         apiTotalResults = 0;
         userLimitedTotal = 0;
         allPapers = [];
+        
+        // 返回错误结果
+        return {
+            success: false,
+            error: error.message || '未知错误'
+        };
     } finally {
         // 无论成功还是失败，都更新分页状态并隐藏加载状态
         loadingDiv.style.display = 'none';
@@ -653,6 +672,51 @@ function saveSearchHistory(history) {
  */
 function addToHistory(searchData) {
     const history = getSearchHistory();
+    
+    // 检查是否有完全相同的搜索条件已存在于历史记录中
+    const isDuplicate = history.some(item => {
+        // 检查主要搜索条件是否相同
+        const basicConditionsMatch = (
+            item.searchField === searchData.searchField &&
+            item.searchInput === searchData.searchInput &&
+            item.timeRange === searchData.timeRange &&
+            item.sortBy === searchData.sortBy &&
+            item.sortOrder === searchData.sortOrder &&
+            item.maxResults === searchData.maxResults
+        );
+        
+        // 如果基本条件不匹配，直接返回false
+        if (!basicConditionsMatch) return false;
+        
+        // 检查额外搜索字段是否匹配
+        // 首先检查长度是否相同
+        if ((item.additionalFields?.length || 0) !== (searchData.additionalFields?.length || 0)) {
+            return false;
+        }
+        
+        // 如果没有额外字段，则视为匹配
+        if (!item.additionalFields || item.additionalFields.length === 0) {
+            return true;
+        }
+        
+        // 检查每个额外字段是否都匹配
+        // 注意：这个实现假设额外字段的顺序也必须相同
+        return item.additionalFields.every((field, index) => {
+            const newField = searchData.additionalFields[index];
+            return (
+                field.field === newField.field &&
+                field.term === newField.term &&
+                field.operator === newField.operator
+            );
+        });
+    });
+    
+    // 如果是重复的搜索条件，则不添加到历史记录
+    if (isDuplicate) {
+        console.log('搜索条件重复，不添加到历史记录');
+        return;
+    }
+    
     const newEntry = {
         ...searchData,
         timestamp: new Date().toISOString(),
@@ -697,6 +761,27 @@ function clearHistory() {
 function applyHistorySearch(historyItem) {
     // 设置标志位，表示当前搜索来自历史记录应用
     isApplyingFromHistory = true;
+    
+    // 将使用的历史记录移到顶部（更新时间戳）
+    const history = getSearchHistory();
+    const itemIndex = history.findIndex(item => item.id === historyItem.id);
+    
+    if (itemIndex !== -1) {
+        // 从历史中移除这个项目
+        const item = history.splice(itemIndex, 1)[0];
+        
+        // 更新时间戳
+        item.timestamp = new Date().toISOString();
+        
+        // 添加到历史顶部
+        history.unshift(item);
+        
+        // 保存更新后的历史
+        saveSearchHistory(history);
+        
+        // 刷新历史显示
+        renderSearchHistory();
+    }
     
     // 设置搜索字段
     document.getElementById('searchField').value = historyItem.searchField;
