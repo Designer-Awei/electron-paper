@@ -95,7 +95,8 @@
                 justify-content: center;
             }
             .danger-button,
-            .secondary-button {
+            .secondary-button,
+            .primary-button {
                 width: 100px;
                 min-width: 100px;
                 max-width: 100px;
@@ -204,7 +205,8 @@
             font-weight: 500;
             transition: all 0.2s ease;
         }
-        .primary-button, .secondary-button {
+        /* 将删除按钮和其他按钮样式进行合并 */
+        .primary-button, .secondary-button, .danger-button {
             width: 112px; /* 固定宽度 */
             height: 36px; /* 固定高度 */
             display: flex;
@@ -231,14 +233,8 @@
             background-color: #e0e0e0;
         }
         .danger-button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
             background-color: #f44336;
             color: white;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s ease;
         }
         .danger-button:hover {
             background-color: #d32f2f;
