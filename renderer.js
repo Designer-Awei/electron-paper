@@ -601,29 +601,44 @@ document.addEventListener('DOMContentLoaded', () => {
     // 添加导航栏切换事件
     const mainSearchTab = document.getElementById('mainSearchTab');
     const historySearchTab = document.getElementById('historySearchTab');
+    const favoritesTab = document.getElementById('favoritesTab');
     const mainSearchContainer = document.getElementById('mainSearchContainer');
     const historyContainer = document.getElementById('historyContainer');
+    const favoritesContainer = document.getElementById('favoritesContainer');
     const mainSearchResults = document.getElementById('mainSearchResults');
     
     mainSearchTab.addEventListener('click', () => {
-        // 切换到主搜索界面
         mainSearchTab.classList.add('active');
         historySearchTab.classList.remove('active');
+        favoritesTab.classList.remove('active');
         mainSearchContainer.style.display = 'block';
         mainSearchResults.style.display = 'block';
         historyContainer.style.display = 'none';
+        favoritesContainer.style.display = 'none';
     });
     
     historySearchTab.addEventListener('click', () => {
-        // 切换到历史搜索界面
         historySearchTab.classList.add('active');
         mainSearchTab.classList.remove('active');
+        favoritesTab.classList.remove('active');
         historyContainer.style.display = 'block';
         mainSearchContainer.style.display = 'none';
         mainSearchResults.style.display = 'none';
+        favoritesContainer.style.display = 'none';
         
-        // 刷新历史记录显示
         renderSearchHistory();
+    });
+    
+    favoritesTab.addEventListener('click', () => {
+        favoritesTab.classList.add('active');
+        mainSearchTab.classList.remove('active');
+        historySearchTab.classList.remove('active');
+        favoritesContainer.style.display = 'block';
+        mainSearchContainer.style.display = 'none';
+        mainSearchResults.style.display = 'none';
+        historyContainer.style.display = 'none';
+        
+        renderFavorites();
     });
 });
 
@@ -834,6 +849,7 @@ function applyHistorySearch(historyItem) {
 function renderSearchHistory() {
     const historyList = document.getElementById('historyList');
     const history = getSearchHistory();
+    const favorites = getFavorites();
     
     if (history.length === 0) {
         historyList.innerHTML = '<div class="history-item">暂无搜索历史</div>';
@@ -847,6 +863,82 @@ function renderSearchHistory() {
         historyItem.className = 'history-item';
         historyItem.style.cursor = 'pointer';
         
+        // 创建内容区域
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'history-content';
+        
+        // 构建显示的搜索条件文本
+        const queryDiv = document.createElement('div');
+        queryDiv.className = 'history-query';
+        
+        // 显示主搜索字段
+        let queryText = `${item.searchInput}`;
+        
+        // 如果有额外字段，添加到查询文本中
+        if (item.additionalFields && item.additionalFields.length > 0) {
+            item.additionalFields.forEach(field => {
+                queryText += ` ${field.operator} ${field.field}:${field.term}`;
+            });
+        }
+        
+        queryDiv.textContent = queryText;
+        
+        const conditionsDiv = document.createElement('div');
+        conditionsDiv.className = 'history-conditions';
+        conditionsDiv.textContent = `搜索字段: ${item.searchField} | 时间范围: ${item.timeRange} | 排序: ${item.sortBy} ${item.sortOrder} | 结果数: ${item.maxResults}`;
+        
+        const dateDiv = document.createElement('div');
+        dateDiv.className = 'history-date';
+        dateDiv.textContent = new Date(item.timestamp).toLocaleString();
+        
+        contentDiv.appendChild(queryDiv);
+        contentDiv.appendChild(conditionsDiv);
+        contentDiv.appendChild(dateDiv);
+        
+        // 创建操作按钮区域
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'history-actions';
+        
+        const favoriteButton = document.createElement('button');
+        favoriteButton.className = 'favorite-button';
+        favoriteButton.textContent = '收藏';
+        favoriteButton.dataset.itemId = item.id;
+        favoriteButton.addEventListener('click', function(event) {
+            event.stopPropagation();
+            const historyItem = history.find(h => h.id === parseInt(this.dataset.itemId));
+            if (historyItem) {
+                addToFavorites(historyItem);
+            }
+        });
+        
+        const applyButton = document.createElement('button');
+        applyButton.className = 'secondary-button';
+        applyButton.textContent = '应用';
+        applyButton.dataset.itemId = item.id;
+        applyButton.addEventListener('click', function(event) {
+            event.stopPropagation();
+            const historyItem = history.find(h => h.id === parseInt(this.dataset.itemId));
+            if (historyItem) {
+                applyHistorySearch(historyItem);
+            }
+        });
+        
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'danger-button';
+        deleteButton.textContent = '删除';
+        deleteButton.dataset.itemId = item.id;
+        deleteButton.addEventListener('click', function(event) {
+            event.stopPropagation();
+            removeFromHistory(parseInt(this.dataset.itemId));
+        });
+        
+        actionsDiv.appendChild(favoriteButton);
+        actionsDiv.appendChild(applyButton);
+        actionsDiv.appendChild(deleteButton);
+        
+        historyItem.appendChild(contentDiv);
+        historyItem.appendChild(actionsDiv);
+        
         // 为整个历史记录项添加点击事件
         historyItem.addEventListener('click', function() {
             const historyItemObj = history.find(h => h.id === item.id);
@@ -854,6 +946,115 @@ function renderSearchHistory() {
                 applyHistorySearch(historyItemObj);
             }
         });
+        
+        historyList.appendChild(historyItem);
+    });
+}
+
+/**
+ * @description 收藏夹管理
+ */
+const FAVORITES_KEY = 'arxiv_favorites';
+
+/**
+ * @description 获取收藏列表
+ * @returns {Array} 收藏列表数组
+ */
+function getFavorites() {
+    const favorites = localStorage.getItem(FAVORITES_KEY);
+    return favorites ? JSON.parse(favorites) : [];
+}
+
+/**
+ * @description 保存收藏列表
+ * @param {Array} favorites 收藏列表数组
+ */
+function saveFavorites(favorites) {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+}
+
+/**
+ * @description 添加到收藏夹并从历史记录中移除
+ * @param {Object} searchData 搜索数据
+ */
+function addToFavorites(searchData) {
+    const favorites = getFavorites();
+    
+    // 检查是否已经收藏
+    const isDuplicate = favorites.some(item => {
+        return item.id === searchData.id;
+    });
+    
+    if (!isDuplicate) {
+        // 添加到收藏夹
+        favorites.unshift(searchData);
+        saveFavorites(favorites);
+        
+        // 从历史记录中移除
+        const history = getSearchHistory();
+        const newHistory = history.filter(item => item.id !== searchData.id);
+        saveSearchHistory(newHistory);
+        
+        // 更新两个列表的显示
+        renderFavorites();
+        renderSearchHistory();
+    }
+}
+
+/**
+ * @description 从收藏夹中移除并添加回历史记录
+ * @param {number} id 收藏项ID
+ */
+function removeFromFavorites(id) {
+    const favorites = getFavorites();
+    // 找到要移除的项目
+    const favoriteItem = favorites.find(item => item.id === id);
+    
+    if (favoriteItem) {
+        // 从收藏夹中移除
+        const newFavorites = favorites.filter(item => item.id !== id);
+        saveFavorites(newFavorites);
+        
+        // 添加回历史记录
+        const history = getSearchHistory();
+        history.unshift(favoriteItem);
+        saveSearchHistory(history);
+        
+        // 更新显示
+        renderFavorites();
+        renderSearchHistory();
+    } else {
+        // 如果没有找到，只更新收藏夹显示
+        renderFavorites();
+    }
+}
+
+/**
+ * @description 清空收藏夹
+ */
+function clearFavorites() {
+    localStorage.removeItem(FAVORITES_KEY);
+    renderFavorites();
+}
+
+/**
+ * @description 渲染收藏夹列表
+ */
+function renderFavorites() {
+    const favoritesList = document.getElementById('favoritesList');
+    const favorites = getFavorites();
+    
+    if (favorites.length === 0) {
+        favoritesList.innerHTML = '<div class="history-item">暂无收藏记录</div>';
+        return;
+    }
+    
+    favoritesList.innerHTML = '';
+    
+    favorites.forEach(item => {
+        const favoriteItem = document.createElement('div');
+        favoriteItem.className = 'history-item';
+        favoriteItem.style.cursor = 'pointer';
         
         // 创建内容区域
         const contentDiv = document.createElement('div');
@@ -895,29 +1096,39 @@ function renderSearchHistory() {
         applyButton.className = 'secondary-button';
         applyButton.textContent = '应用';
         applyButton.dataset.itemId = item.id;
-        applyButton.addEventListener('click', function() {
-            const historyItem = history.find(h => h.id === parseInt(this.dataset.itemId));
-            if (historyItem) {
-                applyHistorySearch(historyItem);
+        applyButton.addEventListener('click', function(event) {
+            event.stopPropagation();
+            const favoriteItem = favorites.find(h => h.id === parseInt(this.dataset.itemId));
+            if (favoriteItem) {
+                applyHistorySearch(favoriteItem);
             }
         });
         
-        const deleteButton = document.createElement('button');
-        deleteButton.className = 'danger-button';
-        deleteButton.textContent = '删除';
-        deleteButton.dataset.itemId = item.id;
-        deleteButton.addEventListener('click', function(event) {
-            // 阻止事件冒泡，避免触发其他点击事件
+        const favoriteButton = document.createElement('button');
+        favoriteButton.className = 'favorite-button active';
+        favoriteButton.textContent = '已收藏';
+        favoriteButton.dataset.itemId = item.id;
+        favoriteButton.addEventListener('click', function(event) {
             event.stopPropagation();
-            removeFromHistory(parseInt(this.dataset.itemId));
+            // 从收藏夹移除，添加回历史记录
+            removeFromFavorites(parseInt(this.dataset.itemId));
         });
         
+        // 更改按钮顺序，把已收藏按钮放在前面
+        actionsDiv.appendChild(favoriteButton);
         actionsDiv.appendChild(applyButton);
-        actionsDiv.appendChild(deleteButton);
         
-        historyItem.appendChild(contentDiv);
-        historyItem.appendChild(actionsDiv);
+        favoriteItem.appendChild(contentDiv);
+        favoriteItem.appendChild(actionsDiv);
         
-        historyList.appendChild(historyItem);
+        // 为整个收藏项添加点击事件
+        favoriteItem.addEventListener('click', function() {
+            const favoriteItemObj = favorites.find(h => h.id === item.id);
+            if (favoriteItemObj) {
+                applyHistorySearch(favoriteItemObj);
+            }
+        });
+        
+        favoritesList.appendChild(favoriteItem);
     });
 }

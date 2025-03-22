@@ -470,39 +470,145 @@
         /* 导航栏样式 */
         .nav-tabs {
             display: flex;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #dee2e6;
-            gap: 2px;
-            flex-wrap: nowrap;
-            overflow-x: auto;
-            white-space: nowrap;
+            gap: 8px;
+            margin-bottom: 16px;
         }
-        .nav-tab {
-            padding: 10px 20px;
-            font-size: 16px;
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-bottom: none;
-            border-radius: 4px 4px 0 0;
+        
+        .tab-button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background-color: #f0f0f0;
             cursor: pointer;
-            transition: all 0.2s;
-            position: relative;
-            bottom: -1px;
-            flex-shrink: 0;
+            font-size: 14px;
+            transition: all 0.3s ease;
         }
-        .nav-tab:hover {
-            background-color: #e9ecef;
+        
+        .tab-button:hover {
+            background-color: #e0e0e0;
         }
-        .nav-tab.active {
-            background-color: #fff;
-            border-bottom: 1px solid #fff;
-            font-weight: 600;
-            color: #4CAF50;
+        
+        .tab-button.active {
+            background-color: #1a73e8;
+            color: white;
+        }
+        
+        /* 按钮样式 */
+        .secondary-button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            background-color: #f0f0f0;
+            color: #333;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            margin-right: 8px;
+        }
+        
+        .secondary-button:hover {
+            background-color: #e0e0e0;
+        }
+        
+        .danger-button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            background-color: #dc3545;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .danger-button:hover {
+            background-color: #c82333;
+        }
+        
+        /* 历史记录和收藏夹项目样式 */
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-radius: 8px;
+            background-color: white;
+            margin-bottom: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .history-item:hover {
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
+        
+        .history-content {
+            flex: 1;
+            margin-right: 16px;
+        }
+        
+        .history-query {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .history-conditions {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        
+        .history-date {
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .history-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
         }
         
         input.search-input {
             min-width: 0;
             width: 100%;
+        }
+        
+        /* 收藏按钮样式 */
+        .favorite-button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            background-color: #f0f0f0;
+            color: #333;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            margin-right: 8px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .favorite-button:hover {
+            background-color: #e0e0e0;
+        }
+        
+        .favorite-button:before {
+            content: '★';
+            margin-right: 4px;
+            font-size: 18px;
+            color: #999;
+        }
+        
+        .favorite-button.active {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .favorite-button.active:before {
+            color: #ffc107;
+            font-size: 20px;
         }
     </style>
 </head>
@@ -510,8 +616,9 @@
     <h1>arXiv 论文搜索</h1>
     
     <div class="nav-tabs">
-        <button class="nav-tab active" id="mainSearchTab">主搜索</button>
-        <button class="nav-tab" id="historySearchTab">历史搜索</button>
+        <button id="mainSearchTab" class="tab-button active">主搜索</button>
+        <button id="historySearchTab" class="tab-button">历史记录</button>
+        <button id="favoritesTab" class="tab-button">收藏夹</button>
     </div>
     
     <div id="mainSearchContainer" class="search-container">
@@ -577,6 +684,16 @@
         <p class="history-tip" style="margin-top: 0; margin-bottom: 16px; color: #666; font-size: 14px;">点击记录可应用搜索条件并返回主搜索页面</p>
         <div class="history-list" id="historyList">
             <!-- 历史记录将通过 JavaScript 动态插入 -->
+        </div>
+    </div>
+
+    <div id="favoritesContainer" class="search-container" style="display: none;">
+        <div class="history-title">
+            <span>收藏夹</span>
+        </div>
+        <p class="history-tip" style="margin-top: 0; margin-bottom: 16px; color: #666; font-size: 14px;">点击记录可应用搜索条件并返回主搜索页面</p>
+        <div class="history-list" id="favoritesList">
+            <!-- 收藏记录将通过 JavaScript 动态插入 -->
         </div>
     </div>
 
