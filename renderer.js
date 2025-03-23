@@ -1900,18 +1900,31 @@ function updateCheckboxStates() {
  */
 selectAllPapers.addEventListener('change', function() {
     const isChecked = this.checked;
-    const checkboxes = papersTableBody.querySelectorAll('input[type="checkbox"]');
     
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = isChecked;
-        const paperId = checkbox.closest('tr').dataset.id;
+    // 修改：全选时选中所有论文，而不仅仅是当前页
+    if (isChecked) {
+        // 全选所有论文
+        allPapers.forEach(paper => {
+            selectedPaperIds.add(paper.id || paper.link);
+        });
         
-        if (isChecked) {
-            selectedPaperIds.add(paperId);
-        } else {
-            selectedPaperIds.delete(paperId);
-        }
-    });
+        // 更新当前页面上所有复选框
+        const checkboxes = papersTableBody.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = true;
+        });
+    } else {
+        // 取消全选
+        selectedPaperIds.clear();
+        
+        // 更新当前页面上所有复选框
+        const checkboxes = papersTableBody.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+    }
+    
+    console.log(`全选状态: ${isChecked}, 选中论文数: ${selectedPaperIds.size}`);
 });
 
 /**
