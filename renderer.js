@@ -1701,17 +1701,17 @@ function showStatusMessage(element, message, type) {
  */
 async function saveSettings() {
     try {
-        const apiKey = settingsApiKey.value.trim();
-        if (!apiKey) {
+        const newApiKey = settingsApiKey.value.trim();
+        if (!newApiKey) {
             showStatusMessage(settingsStatusMessage, '请输入有效的 API 密钥', 'error');
             return;
         }
         
-        const success = await window.electronAPI.translation.saveApiKey(apiKey);
+        const success = await window.electronAPI.translation.saveApiKey(newApiKey);
         if (success) {
             showStatusMessage(settingsStatusMessage, '设置已保存', 'success');
-            // 更新全局API密钥
-            apiKey = apiKey;
+            // 更新全局API密钥 - 修复赋值错误
+            apiKey = newApiKey; // 这里使用新变量名避免与局部变量同名
         } else {
             showStatusMessage(settingsStatusMessage, '保存设置失败', 'error');
         }
