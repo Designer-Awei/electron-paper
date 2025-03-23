@@ -5,12 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
     "dev": "cross-env NODE_ENV=development electron .",
     "dev:win": "start-dev.bat",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder",
-    "dist:win": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ electron-builder --win --config.win.target=portable --config.win.icon=E-paper.ico",
     "dist:simple": "electron-packager . --platform=win32 --arch=x64 --out=dist --icon=E-paper.ico --overwrite"
   },
   "repository": {
@@ -31,8 +27,6 @@
   "devDependencies": {
     "cross-env": "^7.0.3",
     "electron": "^28.0.0",
-    "electron-builder": "^24.13.3",
-    "electron-installer-windows": "^3.0.0",
     "electron-packager": "^17.1.2",
     "electron-reloader": "^1.2.3",
     "electron-winstaller": "^5.4.0"
@@ -41,33 +35,5 @@
     "@electron/remote": "^2.1.2",
     "axios": "^1.8.4",
     "xml2js": "^0.6.2"
-  },
-  "build": {
-    "appId": "com.electron-paper.app",
-    "productName": "Electron Paper",
-    "directories": {
-      "output": "dist"
-    },
-    "win": {
-      "target": "portable",
-      "icon": "E-paper.ico"
-    },
-    "asar": true,
-    "asarUnpack": [],
-    "extraResources": [],
-    "files": [
-      "**/*",
-      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
-      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
-      "!**/node_modules/*.d.ts",
-      "!**/node_modules/.bin",
-      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
-      "!.editorconfig",
-      "!**/._*",
-      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
-      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
-      "!**/{appveyor.yml,.travis.yml,circle.yml}",
-      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
-    ]
   }
 }
