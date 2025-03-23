@@ -10,14 +10,19 @@
   - 摘要内容自适应显示
   - 支持直接访问PDF链接
 - 🔍 高级搜索功能
-  - 多字段组合搜索
+  - 通过关键词或arXiv ID精确搜索论文
   - 支持按标题、作者、摘要、分类搜索
   - 日期范围过滤
   - 结果排序选项
 - 📂 用户界面
   - 响应式设计
   - 优雅简洁的界面
+  - 暗色主题支持
   - 开发者工具支持(F12快捷键)
+- 🔄 实用功能
+  - 支持复制论文信息
+  - 直接下载论文PDF
+  - 一键访问官方页面
 
 ## 技术实现
 
@@ -29,19 +34,25 @@
 
 ## 安装方式
 
-### 方式一：使用安装包
+### 方式一：使用安装包（推荐）
 
-1. 下载最新的 `Electron Paper-Setup.exe` 安装包
-2. 运行安装程序，按照提示完成安装
+1. 下载最新的 `Setup.exe` 安装包
+2. 运行安装程序，应用将自动安装并创建开始菜单快捷方式
 3. 从开始菜单或桌面快捷方式启动应用
 
-### 方式二：开发环境运行
+### 方式二：使用便携版
+
+1. 下载便携版应用文件夹
+2. 解压到任意位置
+3. 运行目录中的 `Electron Paper.exe` 启动应用
+
+### 方式三：开发环境运行
 
 确保您已安装 [Node.js](https://nodejs.org/)。
 
 ```bash
 # 克隆项目
-git clone https://github.com/Designer-Awei/electron-paper.git
+git clone https://github.com/yourusername/electron-paper.git
 
 # 进入项目目录
 cd electron-paper
@@ -49,40 +60,60 @@ cd electron-paper
 # 安装依赖
 npm install
 
-# 启动应用
-npm start
-
 # 开发模式启动（支持热重载）
 npm run dev
+
+# 或直接启动
+npm start
 ```
+
+## 使用说明
+
+1. **搜索论文**：
+   - 在搜索框中输入关键词或arXiv ID（如"2502.14776"）
+   - 点击搜索按钮或按回车键开始搜索
+   - 搜索结果将显示在界面中
+
+2. **查看论文详情**：
+   - 点击搜索结果中的论文标题展开详细信息
+   - 详情包括完整摘要、作者列表、发布日期和分类
+
+3. **下载和访问**：
+   - 点击"PDF"按钮直接下载或在浏览器中打开论文PDF
+   - 点击"arXiv"按钮访问论文在arXiv的官方页面
 
 ## 打包说明
 
-本项目使用 electron-packager 和 electron-winstaller 进行打包。
+本项目提供完整的打包脚本，可以轻松创建便携版和安装版应用。
 
-### 打包便携版
+### 一键打包（推荐）
 
-```bash
-# 打包便携版
-npm run dist:simple
-```
-
-输出位置：`dist/Electron Paper-win32-x64/`
-
-### 打包安装版
+使用一键打包脚本可同时生成便携版和安装版：
 
 ```bash
-# 打包安装版
-.\create-squirrel-installer.bat
-```
-
-输出位置：`dist/installer/Electron Paper-Setup.exe`
-
-### 一键打包（便携版+安装版）
-
-```bash
-# 一键完成所有打包
+# 运行一键打包脚本
 .\package-and-install.bat
+```
+
+此脚本会：
+1. 清理旧版本和已安装的应用
+2. 打包便携版应用
+3. 创建Windows安装程序
+
+输出：
+- 便携版：`dist/Electron Paper-win32-x64/`
+- 安装程序：`dist/installer/Setup.exe`
+
+### 单独打包
+
+如果需要分别打包：
+
+```bash
+# 仅打包便携版
+.\simple-build.bat
+
+# 仅创建安装程序（需先有便携版）
+.\create-squirrel-installer.bat
 ```
 
 ## 项目结构
@@ -93,11 +124,14 @@ electron-paper/
 ├── preload.js      # 预加载脚本(API安全暴露)
 ├── renderer.js     # 渲染进程脚本
 ├── index.html      # 主界面
+├── custom.css      # 自定义样式
 ├── package.json    # 项目配置和依赖
 ├── E-paper.ico     # 应用图标
 ├── simple-build.bat     # 便携版打包脚本
-├── create-squirrel-installer.bat # 安装版打包脚本
+├── create-squirrel-installer.js # 安装程序配置
+├── create-squirrel-installer.bat # 安装程序打包脚本
 ├── package-and-install.bat # 一键打包脚本
+├── start-dev.bat   # 开发模式启动脚本
 └── README.md       # 项目说明
 ```
 
@@ -105,11 +139,22 @@ electron-paper/
 
 - Electron v28.0.0
 - Node.js
-- axios v1.8.4 (API请求)
-- xml2js v0.6.2 (XML解析)
+- axios (API请求)
+- xml2js (XML解析)
 - electron-reloader (开发热重载)
 - electron-packager (应用打包)
 - electron-winstaller (安装包创建)
+
+## 常见问题
+
+- **安装后找不到应用？**
+  查看开始菜单中的"Electron Paper"文件夹
+
+- **打包过程中报错？**
+  确保没有应用实例在运行，关闭所有相关进程后重试
+
+- **无法删除旧版本？**
+  手动结束所有"Electron Paper.exe"进程后再尝试打包
 
 ## 未来计划
 
@@ -128,6 +173,7 @@ electron-paper/
   - 本地收藏功能
   - 论文分类管理
   - 批量下载与导出
+  - 历史记录管理
 
 ## 贡献指南
 
@@ -138,6 +184,13 @@ electron-paper/
 3. 提交更改 (`git commit -m 'Add your feature'`)
 4. 推送到分支 (`git push origin feature/your-feature`)
 5. 创建Pull Request
+
+## 系统要求
+
+- Windows 7 或更高版本
+- 4GB RAM 以上
+- 500MB 可用磁盘空间
+- 互联网连接（用于搜索论文）
 
 ## 许可证
 
