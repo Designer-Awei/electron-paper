@@ -27,7 +27,15 @@
 - 安全的预加载脚本设计
 - 模块化代码结构
 
-## 安装和运行
+## 安装方式
+
+### 方式一：使用安装包
+
+1. 下载最新的 `Electron Paper-Setup.exe` 安装包
+2. 运行安装程序，按照提示完成安装
+3. 从开始菜单或桌面快捷方式启动应用
+
+### 方式二：开发环境运行
 
 确保您已安装 [Node.js](https://nodejs.org/)。
 
@@ -43,6 +51,38 @@ npm install
 
 # 启动应用
 npm start
+
+# 开发模式启动（支持热重载）
+npm run dev
+```
+
+## 打包说明
+
+本项目使用 electron-packager 和 electron-winstaller 进行打包。
+
+### 打包便携版
+
+```bash
+# 打包便携版
+npm run dist:simple
+```
+
+输出位置：`dist/Electron Paper-win32-x64/`
+
+### 打包安装版
+
+```bash
+# 打包安装版
+.\create-squirrel-installer.bat
+```
+
+输出位置：`dist/installer/Electron Paper-Setup.exe`
+
+### 一键打包（便携版+安装版）
+
+```bash
+# 一键完成所有打包
+.\package-and-install.bat
 ```
 
 ## 项目结构
@@ -54,6 +94,10 @@ electron-paper/
 ├── renderer.js     # 渲染进程脚本
 ├── index.html      # 主界面
 ├── package.json    # 项目配置和依赖
+├── E-paper.ico     # 应用图标
+├── simple-build.bat     # 便携版打包脚本
+├── create-squirrel-installer.bat # 安装版打包脚本
+├── package-and-install.bat # 一键打包脚本
 └── README.md       # 项目说明
 ```
 
@@ -64,6 +108,8 @@ electron-paper/
 - axios v1.8.4 (API请求)
 - xml2js v0.6.2 (XML解析)
 - electron-reloader (开发热重载)
+- electron-packager (应用打包)
+- electron-winstaller (安装包创建)
 
 ## 未来计划
 
