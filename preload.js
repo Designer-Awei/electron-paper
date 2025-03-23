@@ -387,5 +387,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     // 文件和目录操作
     selectDirectory: () => selectDirectory(),
-    saveFile: (filePath, content) => saveFile(filePath, content)
+    saveFile: (filePath, content) => saveFile(filePath, content),
+    
+    // 添加对话框API
+    showInputDialog: (options) => ipcRenderer.invoke('dialog:showInputBox', options),
+    
+    // 添加外部链接打开API
+    openExternal: (url) => ipcRenderer.invoke('open-external', url)
 }); 

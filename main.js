@@ -1,7 +1,7 @@
 /**
  * @description Electron 主进程文件
  */
-const { app, BrowserWindow, globalShortcut, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const remote = require('@electron/remote/main');
@@ -129,6 +129,48 @@ app.whenReady().then(() => {
     }
     
     return result.filePaths[0];
+  });
+  
+  // 添加打开外部链接的IPC处理程序
+  ipcMain.handle('open-external', async (event, url) => {
+    try {
+      await shell.openExternal(url);
+      return true;
+    } catch (error) {
+      console.error('打开外部链接失败:', error);
+      return false;
+    }
+  });
+
+  // 处理输入框对话框请求
+  ipcMain.handle('dialog:showInputBox', async (event, options) => {
+    // 获取当前窗口
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    
+    // 确保文件名中含有扩展名
+    const defaultFileName = options.defaultValue || 'arxiv-papers';
+    const defaultPath = defaultFileName.endsWith('.json') ? defaultFileName : `${defaultFileName}.json`;
+    
+    // 使用保存文件对话框让用户输入文件名
+    const result = await dialog.showSaveDialog(focusedWindow, {
+      title: options.title || '保存文件',
+      defaultPath: defaultPath,
+      buttonLabel: '保存',
+      filters: [
+        { name: 'JSON文件', extensions: ['json'] }
+      ]
+    });
+    
+    if (result.canceled) {
+      // 用户取消了保存操作
+      return { canceled: true, value: '' };
+    } else {
+      // 用户选择了保存位置和文件名
+      // 提取文件名（不含路径和扩展名）
+      const fullPath = result.filePath;
+      const fileName = path.basename(fullPath, '.json');
+      return { canceled: false, value: fileName, fullPath: fullPath };
+    }
   });
 
   app.on('activate', () => {

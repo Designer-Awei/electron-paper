@@ -76,6 +76,7 @@ let exportPath = ''; // 存储导出路径
 // 翻译相关的状态
 let isTranslated = false; // 当前是否处于翻译状态
 let originalPapers = []; // 存储原始论文数据
+let translatedPapers = []; // 存储已翻译的论文数据
 let currentApiKey = ''; // 存储当前API密钥
 
 /**
@@ -1339,13 +1340,41 @@ async function toggleTranslation() {
         }
         
         if (!isTranslated) {
-            // 保存原始数据
-            originalPapers = JSON.parse(JSON.stringify(allPapers));
+            // 保存原始数据（如果尚未保存）
+            if (originalPapers.length === 0) {
+                originalPapers = JSON.parse(JSON.stringify(allPapers));
+            }
+            
+            // 检查是否已有缓存的翻译结果
+            if (translatedPapers.length > 0) {
+                // 检查当前论文数组是否与原始论文数组相同
+                const isSamePaperSet = originalPapers.length === allPapers.length && 
+                    originalPapers.every((paper, index) => 
+                        paper.id === allPapers[index].id || paper.link === allPapers[index].link
+                    );
+                
+                // 如果是相同的论文集合，直接使用缓存的翻译结果
+                if (isSamePaperSet) {
+                    console.log('使用缓存的翻译结果');
+                    allPapers = translatedPapers;
+                    isTranslated = true;
+                    translateButton.textContent = '原文';
+                    translateButton.classList.add('active');
+                    renderPapers();
+                    return;
+                }
+                
+                // 如果不是相同的论文集合，清空缓存
+                translatedPapers = [];
+            }
             
             // 执行翻译
             translateButton.disabled = true;
-            const translatedPapers = await translatePapers(allPapers);
-            allPapers = translatedPapers;
+            const newTranslatedPapers = await translatePapers(allPapers);
+            
+            // 缓存翻译结果
+            translatedPapers = newTranslatedPapers;
+            allPapers = newTranslatedPapers;
             
             // 更新UI状态
             isTranslated = true;
@@ -1357,7 +1386,6 @@ async function toggleTranslation() {
         } else {
             // 恢复原始数据
             allPapers = originalPapers;
-            originalPapers = [];
             
             // 更新UI状态
             isTranslated = false;
@@ -1671,13 +1699,8 @@ exportButton.addEventListener('click', async function() {
         }
     }
     
-    // 如果已设置导出路径，直接导出
-    if (exportPath) {
-        exportPapers();
-    } else {
-        // 显示导出路径选择弹窗
-        exportModal.style.display = 'block';
-    }
+    // 直接调用导出函数，不再需要先选择导出路径
+    exportPapers();
 });
 
 /**
@@ -1701,35 +1724,32 @@ function showExportMessage(message, type = 'warning') {
  */
 async function exportPapers() {
     try {
-        if (!exportPath) {
-            // 如果没有设置导出路径，提示用户先设置
-            exportModal.style.display = 'block';
-            return;
-        }
-        
-        // 显示文件名输入弹窗
+        // 创建默认文件名（包含日期）
         const defaultFileName = `arxiv-papers-${new Date().toISOString().slice(0, 10)}`;
-        const fileName = prompt('请输入文件名（不含扩展名）', defaultFileName);
+        
+        // 使用保存文件对话框让用户选择文件名和位置
+        const result = await window.electronAPI.showInputDialog({
+            title: '保存论文数据',
+            defaultValue: defaultFileName
+        });
         
         // 如果用户取消，则中止导出
-        if (fileName === null) {
+        if (result.canceled) {
             return;
         }
         
-        // 如果用户输入了空文件名，使用默认文件名
-        const finalFileName = fileName.trim() ? `${fileName.trim()}.json` : `${defaultFileName}.json`;
-        
+        // 准备导出数据
         const isExportTranslated = isTranslated;
         const data = formatPapersForExport(isExportTranslated);
-        const filePath = `${exportPath}/${finalFileName}`;
         
-        // 调用主进程保存文件
-        const result = await window.electronAPI.saveFile(filePath, JSON.stringify(data, null, 2));
+        // 使用对话框选择的完整路径保存文件
+        const filePath = result.fullPath;
+        const saveResult = await window.electronAPI.saveFile(filePath, JSON.stringify(data, null, 2));
         
-        if (result.success) {
-            alert(`导出成功！已保存 ${data.count} 篇论文到:\n${result.path}`);
+        if (saveResult.success) {
+            alert(`导出成功！已保存 ${data.count} 篇论文到:\n${saveResult.path}`);
         } else {
-            alert(`导出失败: ${result.error}`);
+            alert(`导出失败: ${saveResult.error}`);
         }
     } catch (error) {
         console.error('导出论文时出错:', error);
