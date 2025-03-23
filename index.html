@@ -1001,12 +1001,13 @@
             <div class="form-group">
                 <label for="settingsModelSelection">翻译模型</label>
                 <select id="settingsModelSelection" style="width: 100%; box-sizing: border-box;">
-                    <option value="Qwen/Qwen2.5-7B-Instruct" selected>Qwen/Qwen2.5-7B-Instruct (默认，免费)</option>
-                    <option value="BAAI/bge-reranker-v2-m3">BAAI/bge-reranker-v2-m3 (备选，免费)</option>
-                    <option value="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B">deepseek-ai/DeepSeek-R1-Distill-Qwen-7B (备选，免费)</option>
+                    <option value="Qwen/Qwen2.5-7B-Instruct" selected>Qwen/Qwen2.5-7B-Instruct (默认，32K文本，免费)</option>
+                    <option value="THUDM/glm-4-9b-chat">THUDM/glm-4-9b-chat (备选，128K文本，免费)</option>
+                    <option value="Qwen/Qwen2.5-14B-Instruct">Qwen/Qwen2.5-14B-Instruct (备选，32K文本，付费)</option>
+                    <option value="deepseek-ai/DeepSeek-V3">deepseek-ai/DeepSeek-V3 (备选，64k文本，付费)</option>
                 </select>
                 <div class="description">
-                    选择用于翻译的模型。默认使用 Qwen2.5-7B-Instruct，上下文限制为 32k。
+                    选择用于翻译的模型。默认使用Qwen2.5-7B-Instruct，不同模型支持的上下文长度和翻译质量各有不同。注意：带有"Pro/"前缀的模型需要付费使用。
                 </div>
             </div>
             
@@ -1018,6 +1019,15 @@
                 </div>
                 <div class="description">
                     设置导出论文JSON文件的存放位置。若未设置，将在首次导出时提示选择。
+                </div>
+            </div>
+            
+            <!-- 添加JSON转Excel链接 -->
+            <div class="form-group">
+                <label>JSON转Excel工具</label>
+                <div class="description">
+                    导出的JSON文件可以转换为Excel格式以便阅读和分析。
+                    <a href="https://wejson.cn/json2excel/" target="_blank">点击这里</a> 使用在线JSON转Excel工具。
                 </div>
             </div>
             

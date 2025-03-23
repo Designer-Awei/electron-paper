@@ -265,19 +265,22 @@ async function saveApiKey(apiKey) {
 }
 
 /**
- * @description 使用API翻译文本
- * @param {string} text - 要翻译的文本
+ * @description 翻译文本
+ * @param {string} text - 待翻译的文本
  * @param {string} apiKey - API密钥
+ * @param {string} model - 翻译模型，默认为Qwen/Qwen2.5-7B-Instruct
  * @returns {Promise<string>} 翻译后的文本
  */
-async function translateText(text, apiKey) {
+async function translateText(text, apiKey, model = 'Qwen/Qwen2.5-7B-Instruct') {
     try {
         // 确保文本不超过模型最大上下文长度
         const maxLength = 12000; // 保守估计，32k的三分之一左右
         const truncatedText = text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
         
+        console.log(`使用模型 ${model} 进行翻译`);
+        
         const response = await axios.post('https://api.siliconflow.cn/v1/chat/completions', {
-            model: 'Qwen/Qwen2.5-7B-Instruct', // 使用默认模型
+            model: model, // 使用传入的模型参数
             messages: [
                 { role: 'system', content: '你是一个专业的翻译助手，你的任务是将英文文本准确地翻译成中文，保持专业术语的准确性。只返回翻译结果，不要解释或添加任何其他内容。' },
                 { role: 'user', content: `将以下文本翻译成中文：\n\n${truncatedText}` }
@@ -374,7 +377,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     translation: {
         getApiKey: getApiKey,
         saveApiKey: saveApiKey,
-        translate: translateText
+        translate: (text, apiKey, model) => translateText(text, apiKey, model)
     },
     ipcRenderer: {
         invoke: (channel, ...args) => {

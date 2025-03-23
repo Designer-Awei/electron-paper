@@ -77,7 +77,8 @@ let exportPath = ''; // 存储导出路径
 let isTranslated = false; // 当前是否处于翻译状态
 let originalPapers = []; // 存储原始论文数据
 let translatedPapers = []; // 存储已翻译的论文数据
-let currentApiKey = ''; // 存储当前API密钥
+let apiKey = ''; // 存储当前API密钥
+let lastUsedTranslationModel = ''; // 存储上次使用的翻译模型
 
 /**
  * @description 获取日期范围
@@ -1223,7 +1224,7 @@ async function saveApiKey() {
     try {
         const success = await window.electronAPI.translation.saveApiKey(key);
         if (success) {
-            currentApiKey = key;
+            apiKey = key;
             hideApiKeyModal();
             toggleTranslation(); // 保存成功后继续翻译
         } else {
@@ -1238,10 +1239,10 @@ async function saveApiKey() {
 /**
  * @description 获取API密钥
  */
-async function getApiKey() {
+async function loadApiKey() {
     try {
         const key = await window.electronAPI.translation.getApiKey();
-        currentApiKey = key;
+        apiKey = key;
         return key;
     } catch (error) {
         console.error('获取API密钥时出错:', error);
@@ -1251,69 +1252,146 @@ async function getApiKey() {
 
 /**
  * @description 翻译文本
- * @param {string} text - 待翻译的文本
+ * @param {string} text - 要翻译的文本
  * @returns {Promise<string>} 翻译后的文本
  */
 async function translateText(text) {
     try {
-        return await window.electronAPI.translation.translate(text, currentApiKey);
+        if (!apiKey) {
+            await loadApiKey();
+        }
+        
+        // 获取当前选择的翻译模型
+        const selectedModel = settingsModelSelection.value;
+        console.log('当前使用的翻译模型:', selectedModel);
+        
+        const translated = await window.electronAPI.translation.translate(text, apiKey, selectedModel);
+        return translated;
     } catch (error) {
-        console.error('翻译失败:', error);
+        console.error('翻译错误:', error);
+        alert(`翻译失败: ${error.message}`);
         throw error;
     }
 }
 
 /**
- * @description 翻译论文数据
+ * @description 翻译所有论文
  * @param {Array} papers - 论文数组
  * @returns {Promise<Array>} 翻译后的论文数组
  */
 async function translatePapers(papers) {
-    loadingDiv.style.display = 'block';
-    loadingDiv.textContent = '正在翻译...';
+    if (!papers || papers.length === 0) {
+        alert('没有可翻译的论文');
+        return [];
+    }
+    
+    if (!apiKey) {
+        try {
+            await loadApiKey();
+        } catch (error) {
+            console.error('加载API密钥失败:', error);
+            alert('请先在设置中配置有效的API密钥');
+            return [];
+        }
+    }
+    
+    // 获取当前选择的翻译模型
+    const selectedModel = settingsModelSelection.value;
+    
+    // 如果当前要翻译的论文与上次翻译的论文相同，且使用相同的模型，则使用缓存的结果
+    if (
+        originalPapers && 
+        originalPapers.length === papers.length && 
+        JSON.stringify(papers.map(p => p.id)) === JSON.stringify(originalPapers.map(p => p.id)) &&
+        selectedModel === lastUsedTranslationModel &&
+        translatedPapers && 
+        translatedPapers.length > 0
+    ) {
+        console.log('使用缓存的翻译结果');
+        isTranslated = true;
+        translateButton.textContent = isTranslated ? '显示原文' : '翻译';
+        
+        // 更新allPapers为翻译后的论文
+        allPapers = [...translatedPapers];
+        renderPapers();
+        
+        return translatedPapers;
+    }
+    
+    // 显示加载中提示
+    const loadingMessage = document.createElement('div');
+    loadingMessage.id = 'translationLoadingMessage';
+    loadingMessage.textContent = '翻译中...';
+    loadingMessage.style.position = 'fixed';
+    loadingMessage.style.top = '50%';
+    loadingMessage.style.left = '50%';
+    loadingMessage.style.transform = 'translate(-50%, -50%)';
+    loadingMessage.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    loadingMessage.style.color = 'white';
+    loadingMessage.style.padding = '20px';
+    loadingMessage.style.borderRadius = '5px';
+    loadingMessage.style.zIndex = '1000';
+    document.body.appendChild(loadingMessage);
     
     try {
-        const translatedPapers = [...papers]; // 复制论文数组
+        console.log(`开始翻译${papers.length}篇论文，使用模型: ${selectedModel}`);
         
-        // 构建翻译批量请求
-        const batchPromises = papers.map(async (paper, index) => {
+        // 记录本次使用的翻译模型
+        lastUsedTranslationModel = selectedModel;
+        
+        // 保存原始论文数据
+        originalPapers = [...papers];
+        
+        // 创建一个深拷贝以避免修改原始数据
+        const papersCopy = JSON.parse(JSON.stringify(papers));
+        
+        // 创建一个翻译进度计数器
+        let translatedCount = 0;
+        
+        // 并行翻译所有论文的标题和摘要
+        const translationPromises = papersCopy.map(async (paper, index) => {
             try {
                 // 翻译标题
-                const titlePromise = translateText(paper.title);
+                paper.title = await translateText(paper.title);
                 
                 // 翻译摘要
-                const summaryPromise = translateText(paper.summary);
+                if (paper.summary) {
+                    paper.summary = await translateText(paper.summary);
+                }
                 
-                // 等待两个翻译完成
-                const [translatedTitle, translatedSummary] = await Promise.all([titlePromise, summaryPromise]);
+                // 更新进度
+                translatedCount++;
+                loadingMessage.textContent = `翻译中... ${translatedCount}/${papers.length}`;
                 
-                // 更新论文数据
-                translatedPapers[index] = {
-                    ...paper,
-                    title: translatedTitle,
-                    summary: translatedSummary,
-                    isTranslated: true
-                };
-                
-                // 更新加载状态
-                loadingDiv.textContent = `正在翻译... (${index + 1}/${papers.length})`;
-                
-                return true;
+                return paper;
             } catch (error) {
                 console.error(`翻译论文 ${index + 1} 失败:`, error);
-                return false;
+                return paper; // 返回未翻译的论文
             }
         });
         
         // 等待所有翻译完成
-        await Promise.all(batchPromises);
+        translatedPapers = await Promise.all(translationPromises);
         
+        // 更新全局变量和状态
+        allPapers = [...translatedPapers]; // 更新全局论文数据为翻译后的内容
+        isTranslated = true;
+        translateButton.textContent = isTranslated ? '显示原文' : '翻译';
+        
+        // 重新渲染页面
+        renderPapers();
+        
+        console.log('翻译完成，已更新显示');
         return translatedPapers;
     } catch (error) {
-        console.error('批量翻译失败:', error);
-        throw error;
+        console.error('翻译论文时出错:', error);
+        alert(`翻译失败: ${error.message}`);
+        return papers; // 返回原始论文
     } finally {
-        loadingDiv.style.display = 'none';
+        // 移除加载提示
+        if (loadingMessage && loadingMessage.parentNode) {
+            loadingMessage.parentNode.removeChild(loadingMessage);
+        }
     }
 }
 
@@ -1329,14 +1407,24 @@ async function toggleTranslation() {
         }
         
         // 检查是否已经有API密钥
-        if (!currentApiKey) {
-            currentApiKey = await getApiKey();
+        if (!apiKey) {
+            apiKey = await loadApiKey();
             
             // 如果仍然没有API密钥，显示输入弹窗
-            if (!currentApiKey) {
+            if (!apiKey) {
                 showApiKeyModal();
                 return;
             }
+        }
+        
+        // 获取当前选择的翻译模型
+        const currentSelectedModel = settingsModelSelection.value;
+        console.log('当前选择的模型:', currentSelectedModel, '上次使用的模型:', lastUsedTranslationModel);
+        
+        // 检测模型是否变更
+        const modelChanged = lastUsedTranslationModel && currentSelectedModel !== lastUsedTranslationModel;
+        if (modelChanged) {
+            console.log('检测到模型已变更，将重新进行翻译');
         }
         
         if (!isTranslated) {
@@ -1345,44 +1433,36 @@ async function toggleTranslation() {
                 originalPapers = JSON.parse(JSON.stringify(allPapers));
             }
             
-            // 检查是否已有缓存的翻译结果
-            if (translatedPapers.length > 0) {
+            // 检查是否已有缓存的翻译结果，并且模型没有变更
+            if (translatedPapers.length > 0 && !modelChanged) {
                 // 检查当前论文数组是否与原始论文数组相同
                 const isSamePaperSet = originalPapers.length === allPapers.length && 
                     originalPapers.every((paper, index) => 
                         paper.id === allPapers[index].id || paper.link === allPapers[index].link
                     );
                 
-                // 如果是相同的论文集合，直接使用缓存的翻译结果
+                // 如果是相同的论文集合且使用的是相同的模型，直接使用缓存的翻译结果
                 if (isSamePaperSet) {
                     console.log('使用缓存的翻译结果');
                     allPapers = translatedPapers;
                     isTranslated = true;
-                    translateButton.textContent = '原文';
+                    translateButton.textContent = '显示原文';
                     translateButton.classList.add('active');
                     renderPapers();
                     return;
                 }
-                
-                // 如果不是相同的论文集合，清空缓存
-                translatedPapers = [];
             }
             
-            // 执行翻译
+            // 执行翻译（当模型变更或没有缓存结果时）
             translateButton.disabled = true;
-            const newTranslatedPapers = await translatePapers(allPapers);
-            
-            // 缓存翻译结果
-            translatedPapers = newTranslatedPapers;
-            allPapers = newTranslatedPapers;
+            await translatePapers(allPapers);
             
             // 更新UI状态
             isTranslated = true;
-            translateButton.textContent = '原文';
+            translateButton.textContent = '显示原文';
             translateButton.classList.add('active');
             
-            // 重新渲染
-            renderPapers();
+            // 注意：不需要在这里调用renderPapers()，因为translatePapers()已经在内部调用了
         } else {
             // 恢复原始数据
             allPapers = originalPapers;
@@ -1396,7 +1476,7 @@ async function toggleTranslation() {
             renderPapers();
         }
     } catch (error) {
-        console.error('切换翻译失败:', error);
+        console.error('切换翻译状态时出错:', error);
         alert('翻译失败: ' + error.message);
     } finally {
         translateButton.disabled = false;
@@ -1435,7 +1515,7 @@ async function saveSettings() {
         if (success) {
             showStatusMessage(settingsStatusMessage, '设置已保存', 'success');
             // 更新全局API密钥
-            currentApiKey = apiKey;
+            apiKey = apiKey;
         } else {
             showStatusMessage(settingsStatusMessage, '保存设置失败', 'error');
         }
@@ -1527,7 +1607,6 @@ async function openSettings() {
 }
 
 // 添加事件监听器
-translateButton.addEventListener('click', toggleTranslation);
 saveApiKeyButton.addEventListener('click', saveApiKey);
 cancelApiKeyButton.addEventListener('click', hideApiKeyModal);
 closeModalButton.addEventListener('click', hideApiKeyModal);
@@ -1538,9 +1617,6 @@ window.addEventListener('click', (event) => {
         hideApiKeyModal();
     }
 });
-
-// 加载API密钥
-getApiKey();
 
 /**
  * @description 根据搜索结果更新表格内容
@@ -1648,11 +1724,30 @@ selectAllPapers.addEventListener('change', function() {
  * @returns {Object} 格式化后的论文数据
  */
 function formatPapersForExport(translated = false) {
-    const papers = translated && isTranslated ? allPapers : originalPapers;
+    // 确定使用哪个数据源 - 修复可能导致导出0篇的问题
+    let papers;
+    if (translated && isTranslated) {
+        papers = allPapers; // 使用当前翻译后的数据
+    } else if (originalPapers.length > 0) {
+        papers = originalPapers; // 使用原始数据（如果有）
+    } else {
+        papers = allPapers; // 如果原始数据为空，则使用当前数据
+    }
+    
+    // 检查papers是否有效
+    if (!papers || papers.length === 0) {
+        console.warn('formatPapersForExport: 未找到有效的论文数据');
+        papers = allPapers; // 最终备选：使用全局allPapers
+    }
+    
+    console.log(`准备导出，数据源：${papers === allPapers ? 'allPapers' : 'originalPapers'}, 数据量: ${papers.length}, 选中论文: ${selectedPaperIds.size}`);
+    
     const selectedPapers = papers.filter(paper => selectedPaperIds.has(paper.id || paper.link));
+    console.log(`过滤出选中论文: ${selectedPapers.length} 篇`);
     
     // 如果没有选中任何论文，默认导出全部
     const papersToExport = selectedPapers.length > 0 ? selectedPapers : papers;
+    console.log(`最终导出论文数量: ${papersToExport.length} 篇`);
     
     // 去重处理 - 基于链接
     const uniquePapers = [];
@@ -1673,6 +1768,8 @@ function formatPapersForExport(translated = false) {
             });
         }
     });
+    
+    console.log(`去重后导出论文数量: ${uniquePapers.length} 篇`);
     
     return {
         timestamp: new Date().toISOString(),
@@ -1724,8 +1821,15 @@ function showExportMessage(message, type = 'warning') {
  */
 async function exportPapers() {
     try {
-        // 创建默认文件名（包含日期）
-        const defaultFileName = `arxiv-papers-${new Date().toISOString().slice(0, 10)}`;
+        console.log('开始导出论文...');
+        
+        // 创建默认文件名（包含日期和时间，精确到分钟）
+        const now = new Date();
+        const date = now.toISOString().slice(0, 10);
+        const time = now.toTimeString().slice(0, 5).replace(':', '-');
+        const defaultFileName = `arxiv-papers-${date}_${time}`;
+        
+        console.log('尝试使用文件对话框获取文件名...');
         
         // 使用保存文件对话框让用户选择文件名和位置
         const result = await window.electronAPI.showInputDialog({
@@ -1733,8 +1837,11 @@ async function exportPapers() {
             defaultValue: defaultFileName
         });
         
+        console.log('对话框返回结果:', result);
+        
         // 如果用户取消，则中止导出
         if (result.canceled) {
+            console.log('用户取消了导出操作');
             return;
         }
         
@@ -1742,9 +1849,13 @@ async function exportPapers() {
         const isExportTranslated = isTranslated;
         const data = formatPapersForExport(isExportTranslated);
         
+        console.log(`准备导出 ${data.count} 篇论文，路径: ${result.fullPath}`);
+        
         // 使用对话框选择的完整路径保存文件
         const filePath = result.fullPath;
         const saveResult = await window.electronAPI.saveFile(filePath, JSON.stringify(data, null, 2));
+        
+        console.log('保存结果:', saveResult);
         
         if (saveResult.success) {
             alert(`导出成功！已保存 ${data.count} 篇论文到:\n${saveResult.path}`);
@@ -1828,5 +1939,55 @@ document.addEventListener('DOMContentLoaded', function() {
     if (savedPath) {
         exportPath = savedPath;
         paperExportPath.value = savedPath;
+    }
+    
+    // 确保按钮事件监听器正确绑定
+    console.log('正在绑定翻译和导出按钮事件...');
+    
+    // 绑定翻译按钮事件
+    const translateBtn = document.getElementById('translateButton');
+    if (translateBtn) {
+        // 先移除可能的旧事件监听器，防止重复绑定
+        translateBtn.removeEventListener('click', toggleTranslation);
+        // 然后添加新的事件监听器
+        translateBtn.addEventListener('click', toggleTranslation);
+        console.log('翻译按钮事件已绑定');
+    } else {
+        console.error('未找到翻译按钮元素');
+    }
+    
+    // 绑定导出按钮事件
+    const exportBtn = document.getElementById('exportButton');
+    if (exportBtn) {
+        // 先移除可能的旧事件监听器，防止重复绑定
+        const exportHandler = async function() {
+            console.log('导出按钮被点击');
+            // 检查是否有论文数据
+            if (!allPapers || allPapers.length === 0) {
+                alert('没有可导出的论文数据，请先搜索论文');
+                return;
+            }
+            
+            // 检查是否有选中的论文
+            if (selectedPaperIds.size === 0) {
+                // 提示用户是否导出所有论文
+                if (!confirm(`您当前没有选择任何论文，是否导出全部 ${allPapers.length} 篇论文？`)) {
+                    return;
+                }
+            }
+            
+            // 直接调用导出函数
+            exportPapers();
+        };
+        
+        // 先移除所有现有的click事件处理程序
+        exportBtn.replaceWith(exportBtn.cloneNode(true));
+        // 重新获取元素引用
+        const newExportBtn = document.getElementById('exportButton');
+        // 添加唯一的事件处理程序
+        newExportBtn.addEventListener('click', exportHandler);
+        console.log('导出按钮事件已绑定');
+    } else {
+        console.error('未找到导出按钮元素');
     }
 });
