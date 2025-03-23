@@ -2187,3 +2187,6 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('未找到导出按钮元素');
     }
 });
+
+// 更新搜索输入框提示
+searchInput.placeholder = '输入关键词或arXiv ID (如2502.14776)';

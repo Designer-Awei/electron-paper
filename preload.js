@@ -36,7 +36,24 @@ async function fetchArxivPapers(searchQueries, options = {}) {
             const searchQuery = searchQueries.map((q, index) => {
                 const { field, term, operator } = q;
                 
-                // 正确映射API字段前缀
+                // 检查是否是arXiv ID格式 (YYMM.nnnnn)
+                const isArxivId = /^\d{4}\.\d{4,5}$/.test(term.trim());
+                
+                // 如果是arXiv ID格式，直接使用id:前缀进行精确搜索
+                if (isArxivId) {
+                    console.log('检测到arXiv ID格式:', term);
+                    const formattedTerm = encodeURIComponent(term);
+                    const queryPart = `id:${formattedTerm}`;
+                    
+                    // 第一个条件或空运算符不添加运算符前缀
+                    if (index === 0 || !operator) {
+                        return queryPart;
+                    } else {
+                        return `${operator}+${queryPart}`;
+                    }
+                }
+                
+                // 正常的字段搜索逻辑
                 const prefix = field === 'all' ? 'all' : 
                               field === 'ti' ? 'ti' :
                               field === 'au' ? 'au' :
