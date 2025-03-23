@@ -79,6 +79,7 @@ let originalPapers = []; // 存储原始论文数据
 let translatedPapers = []; // 存储已翻译的论文数据
 let apiKey = ''; // 存储当前API密钥
 let lastUsedTranslationModel = ''; // 存储上次使用的翻译模型
+let isTranslationCancelled = false; // 控制翻译取消
 
 /**
  * @description 获取日期范围
@@ -255,6 +256,18 @@ window.searchPapers = async function() {
 async function searchPapers() {
     console.log('开始搜索论文...');
     try {
+        // 如果有正在进行的翻译任务，中断它
+        const translationProgressContainer = document.getElementById('translationProgressContainer');
+        if (translationProgressContainer) {
+            console.log('检测到正在进行的翻译任务，将其中断');
+            // 设置取消标志
+            isTranslationCancelled = true;
+            // 移除进度条
+            if (translationProgressContainer.parentNode) {
+                translationProgressContainer.parentNode.removeChild(translationProgressContainer);
+            }
+        }
+        
         // 显示加载状态
         loadingDiv.style.display = 'block';
         errorDiv.style.display = 'none';
@@ -268,6 +281,16 @@ async function searchPapers() {
         totalResults = 0;
         apiTotalResults = 0;
         userLimitedTotal = 0;
+
+        // 重置翻译相关状态
+        isTranslated = false;
+        originalPapers = [];
+        translatedPapers = [];
+        lastUsedTranslationModel = '';
+        // 更新翻译按钮状态
+        translateButton.textContent = '翻译';
+        translateButton.classList.remove('active');
+        translateButton.disabled = false; // 确保翻译按钮是启用状态
 
         // 获取搜索参数
         const queries = getSearchQueries();
@@ -1318,20 +1341,78 @@ async function translatePapers(papers) {
         return translatedPapers;
     }
     
-    // 显示加载中提示
-    const loadingMessage = document.createElement('div');
-    loadingMessage.id = 'translationLoadingMessage';
-    loadingMessage.textContent = '翻译中...';
-    loadingMessage.style.position = 'fixed';
-    loadingMessage.style.top = '50%';
-    loadingMessage.style.left = '50%';
-    loadingMessage.style.transform = 'translate(-50%, -50%)';
-    loadingMessage.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-    loadingMessage.style.color = 'white';
-    loadingMessage.style.padding = '20px';
-    loadingMessage.style.borderRadius = '5px';
-    loadingMessage.style.zIndex = '1000';
-    document.body.appendChild(loadingMessage);
+    // 创建取消标志
+    let isCancelled = false;
+    
+    // 重置全局取消标志
+    isTranslationCancelled = false;
+    
+    // 获取搜索表单和论文列表元素
+    const searchForm = document.getElementById('mainSearchContainer');
+    const resultsTable = document.getElementById('mainSearchResults');
+    
+    // 创建内嵌式翻译进度条容器
+    const translationProgressContainer = document.createElement('div');
+    translationProgressContainer.id = 'translationProgressContainer';
+    translationProgressContainer.style.width = '100%';
+    translationProgressContainer.style.padding = '15px';
+    translationProgressContainer.style.marginBottom = '20px';
+    translationProgressContainer.style.backgroundColor = '#f8f9fa';
+    translationProgressContainer.style.borderRadius = '5px';
+    translationProgressContainer.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+    
+    // 进度条上部信息
+    const progressHeader = document.createElement('div');
+    progressHeader.style.display = 'flex';
+    progressHeader.style.alignItems = 'center';
+    progressHeader.style.marginBottom = '10px';
+    
+    // 左侧信息
+    const progressInfo = document.createElement('div');
+    const progressTitle = document.createElement('div');
+    progressTitle.style.fontWeight = 'bold';
+    progressTitle.style.marginBottom = '5px';
+    progressTitle.textContent = '正在翻译论文';
+    
+    const modelInfo = document.createElement('div');
+    modelInfo.style.fontSize = '13px';
+    modelInfo.style.color = '#666';
+    modelInfo.textContent = `使用模型: ${selectedModel}`;
+    
+    progressInfo.appendChild(progressTitle);
+    progressInfo.appendChild(modelInfo);
+    
+    progressHeader.appendChild(progressInfo);
+    
+    // 进度信息
+    const progressText = document.createElement('div');
+    progressText.id = 'translationProgressText';
+    progressText.textContent = `翻译中... 0/${papers.length} (0%)`;
+    progressText.style.marginBottom = '10px';
+    
+    // 进度条
+    const progressBarContainer = document.createElement('div');
+    progressBarContainer.style.width = '100%';
+    progressBarContainer.style.backgroundColor = '#e0e0e0';
+    progressBarContainer.style.borderRadius = '4px';
+    progressBarContainer.style.overflow = 'hidden';
+    
+    const progressBar = document.createElement('div');
+    progressBar.id = 'translationProgressBar';
+    progressBar.style.height = '6px';
+    progressBar.style.width = '0%';
+    progressBar.style.backgroundColor = '#4CAF50';
+    progressBar.style.transition = 'width 0.3s';
+    
+    progressBarContainer.appendChild(progressBar);
+    
+    // 组装进度条容器
+    translationProgressContainer.appendChild(progressHeader);
+    translationProgressContainer.appendChild(progressText);
+    translationProgressContainer.appendChild(progressBarContainer);
+    
+    // 插入到搜索表单和结果表格之间
+    searchForm.parentNode.insertBefore(translationProgressContainer, resultsTable);
     
     try {
         console.log(`开始翻译${papers.length}篇论文，使用模型: ${selectedModel}`);
@@ -1339,8 +1420,8 @@ async function translatePapers(papers) {
         // 记录本次使用的翻译模型
         lastUsedTranslationModel = selectedModel;
         
-        // 保存原始论文数据
-        originalPapers = [...papers];
+        // 保存原始论文数据的深拷贝
+        originalPapers = JSON.parse(JSON.stringify(papers));
         
         // 创建一个深拷贝以避免修改原始数据
         const papersCopy = JSON.parse(JSON.stringify(papers));
@@ -1348,50 +1429,159 @@ async function translatePapers(papers) {
         // 创建一个翻译进度计数器
         let translatedCount = 0;
         
-        // 并行翻译所有论文的标题和摘要
-        const translationPromises = papersCopy.map(async (paper, index) => {
+        // 更新进度的函数
+        const updateProgress = (count, total) => {
+            const percent = Math.round((count / total) * 100);
+            
+            // 更新进度文本
+            progressText.textContent = `翻译中... ${count}/${total} (${percent}%)`;
+            
+            // 更新进度条
+            progressBar.style.width = `${percent}%`;
+            
+            // 更新标题
+            document.title = `[翻译 ${count}/${total}] Electron Paper`;
+        };
+        
+        // 实时更新翻译结果到界面的函数
+        const updateUIWithTranslation = (paper, index) => {
+            if (index >= 0 && index < allPapers.length) {
+                // 更新全局数据中的这篇论文
+                allPapers[index].title = paper.title;
+                if (paper.summary) allPapers[index].summary = paper.summary;
+                
+                // 找到当前页面中对应的这篇论文（如果存在）
+                const perPage = 20; // 每页固定显示20篇
+                const startIndex = (currentPage - 1) * perPage;
+                const endIndex = Math.min(startIndex + perPage, allPapers.length);
+                
+                // 检查这篇论文是否在当前页面上
+                if (index >= startIndex && index < endIndex && isTranslated) {
+                    console.log(`更新界面: 第${index+1}篇论文 (标题和摘要同时更新)`);
+                    
+                    // 计算在当前页面上的索引
+                    const pageIndex = index - startIndex;
+                    // 获取表格行
+                    const rows = papersTableBody.querySelectorAll('tr');
+                    if (pageIndex >= 0 && pageIndex < rows.length) {
+                        try {
+                            const row = rows[pageIndex];
+                            // 更新标题单元格（第2列）
+                            const titleCell = row.children[1];
+                            if (titleCell) {
+                                const titleDiv = titleCell.querySelector('.title-cell');
+                                if (titleDiv) {
+                                    const paperIndex = startIndex + pageIndex + 1;
+                                    titleDiv.innerHTML = `<small style="color: #666;">[${paperIndex}]</small> ${paper.title}`;
+                                }
+                            }
+                            
+                            // 更新摘要单元格（第6列）
+                            const summaryCell = row.children[5];
+                            if (summaryCell && paper.summary) {
+                                const summaryDiv = summaryCell.querySelector('.abstract-cell');
+                                if (summaryDiv) {
+                                    summaryDiv.innerHTML = paper.summary;
+                                }
+                            }
+                        } catch (error) {
+                            console.error('更新界面时出错:', error);
+                        }
+                    }
+                }
+            }
+        };
+        
+        // 确保用户知道正在进行翻译
+        isTranslated = true;
+        translateButton.textContent = '显示原文';
+        translateButton.classList.add('active');
+        
+        // 创建一个延迟函数
+        const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+        
+        // 逐篇翻译论文，实时更新界面
+        for (let paperIndex = 0; paperIndex < papersCopy.length; paperIndex++) {
+            if (isCancelled || isTranslationCancelled) {
+                console.log('翻译已被用户取消');
+                break;
+            }
+            
+            const paper = papersCopy[paperIndex];
+            console.log(`开始翻译第 ${paperIndex + 1}/${papersCopy.length} 篇论文`);
+            
             try {
+                // 创建论文的临时副本，避免更新未完成的翻译
+                const paperCopy = { ...paper };
+                
                 // 翻译标题
-                paper.title = await translateText(paper.title);
+                paperCopy.title = await translateText(paper.title);
                 
                 // 翻译摘要
                 if (paper.summary) {
-                    paper.summary = await translateText(paper.summary);
+                    paperCopy.summary = await translateText(paper.summary);
                 }
                 
-                // 更新进度
-                translatedCount++;
-                loadingMessage.textContent = `翻译中... ${translatedCount}/${papers.length}`;
+                // 翻译完成后，更新原始论文对象
+                paper.title = paperCopy.title;
+                if (paper.summary) {
+                    paper.summary = paperCopy.summary;
+                }
                 
-                return paper;
+                // 添加短暂延迟，确保DOM更新有序进行
+                await delay(50);
+                
+                // 在标题和摘要都翻译完成后，一次性更新界面
+                updateUIWithTranslation(paper, paperIndex);
+                
+                // 更新翻译进度
+                translatedCount++;
+                updateProgress(translatedCount, papersCopy.length);
+                
+                // 将翻译结果保存到最终数组
+                translatedPapers[paperIndex] = paper;
             } catch (error) {
-                console.error(`翻译论文 ${index + 1} 失败:`, error);
-                return paper; // 返回未翻译的论文
+                console.error(`翻译论文 ${paperIndex + 1} 失败:`, error);
+                
+                // 更新翻译进度
+                translatedCount++;
+                updateProgress(translatedCount, papersCopy.length);
             }
-        });
-        
-        // 等待所有翻译完成
-        translatedPapers = await Promise.all(translationPromises);
+        }
         
         // 更新全局变量和状态
-        allPapers = [...translatedPapers]; // 更新全局论文数据为翻译后的内容
-        isTranslated = true;
-        translateButton.textContent = isTranslated ? '显示原文' : '翻译';
+        if (!isCancelled && !isTranslationCancelled) {
+            console.log('翻译完成，已更新显示');
+        } else {
+            console.log('翻译被取消，使用部分翻译结果');
+        }
         
-        // 重新渲染页面
-        renderPapers();
+        // 更新页面状态
+        if (isTranslated) {
+            allPapers = papersCopy;
+            renderPapers();
+        }
         
-        console.log('翻译完成，已更新显示');
-        return translatedPapers;
+        // 恢复原始标题
+        document.title = 'Electron Paper';
+        
+        return isCancelled ? papers : papersCopy;
     } catch (error) {
         console.error('翻译论文时出错:', error);
         alert(`翻译失败: ${error.message}`);
+        
+        // 恢复原始标题
+        document.title = 'Electron Paper';
+        
         return papers; // 返回原始论文
     } finally {
-        // 移除加载提示
-        if (loadingMessage && loadingMessage.parentNode) {
-            loadingMessage.parentNode.removeChild(loadingMessage);
+        // 移除进度条
+        if (translationProgressContainer && translationProgressContainer.parentNode) {
+            translationProgressContainer.parentNode.removeChild(translationProgressContainer);
         }
+        
+        // 启用翻译按钮
+        translateButton.disabled = false;
     }
 }
 
@@ -1428,6 +1618,11 @@ async function toggleTranslation() {
         }
         
         if (!isTranslated) {
+            // 切换UI状态，即使在翻译前也使用户知道现在是翻译状态
+            isTranslated = true;
+            translateButton.textContent = '显示原文';
+            translateButton.classList.add('active');
+            
             // 保存原始数据（如果尚未保存）
             if (originalPapers.length === 0) {
                 originalPapers = JSON.parse(JSON.stringify(allPapers));
@@ -1445,9 +1640,6 @@ async function toggleTranslation() {
                 if (isSamePaperSet) {
                     console.log('使用缓存的翻译结果');
                     allPapers = translatedPapers;
-                    isTranslated = true;
-                    translateButton.textContent = '显示原文';
-                    translateButton.classList.add('active');
                     renderPapers();
                     return;
                 }
@@ -1455,17 +1647,22 @@ async function toggleTranslation() {
             
             // 执行翻译（当模型变更或没有缓存结果时）
             translateButton.disabled = true;
-            await translatePapers(allPapers);
             
-            // 更新UI状态
-            isTranslated = true;
-            translateButton.textContent = '显示原文';
-            translateButton.classList.add('active');
+            // 执行非阻塞翻译，让界面保持响应
+            translatePapers(allPapers).then(() => {
+                console.log('翻译任务完成');
+                translateButton.disabled = false;
+            }).catch(error => {
+                console.error('翻译任务出错:', error);
+                translateButton.disabled = false;
+            });
             
-            // 注意：不需要在这里调用renderPapers()，因为translatePapers()已经在内部调用了
+            // 无需等待翻译完成，立即返回以保持界面响应
         } else {
             // 恢复原始数据
-            allPapers = originalPapers;
+            if (originalPapers.length > 0) {
+                allPapers = JSON.parse(JSON.stringify(originalPapers));
+            }
             
             // 更新UI状态
             isTranslated = false;
@@ -1478,7 +1675,6 @@ async function toggleTranslation() {
     } catch (error) {
         console.error('切换翻译状态时出错:', error);
         alert('翻译失败: ' + error.message);
-    } finally {
         translateButton.disabled = false;
     }
 }
