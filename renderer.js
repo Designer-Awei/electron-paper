@@ -51,6 +51,17 @@ const settingsModelSelection = document.getElementById('settingsModelSelection')
 const saveSettingsButton = document.getElementById('saveSettingsButton');
 const settingsStatusMessage = document.getElementById('settingsStatusMessage');
 
+// 获取导出相关的DOM元素
+const selectAllPapers = document.getElementById('selectAllPapers');
+const exportButton = document.getElementById('exportButton');
+const paperExportPath = document.getElementById('paperExportPath');
+const selectPathButton = document.getElementById('selectPathButton');
+const exportModal = document.getElementById('exportModal');
+const closeExportModal = document.getElementById('closeExportModal');
+const cancelExport = document.getElementById('cancelExport');
+const confirmExport = document.getElementById('confirmExport');
+const exportMessage = document.getElementById('exportMessage');
+
 // 当前页码和每页数量
 let currentPage = 1;
 let totalResults = 0;
@@ -59,6 +70,8 @@ let apiTotalResults = 0; // 添加API返回的原始总结果数变量
 // 添加变量来存储所有获取到的论文和全局状态
 let allPapers = []; // 存储所有获取到的论文
 let userLimitedTotal = 0; // 用户限制的总论文数
+let selectedPaperIds = new Set(); // 存储被选中的论文ID（使用链接作为唯一标识）
+let exportPath = ''; // 存储导出路径
 
 // 翻译相关的状态
 let isTranslated = false; // 当前是否处于翻译状态
@@ -401,8 +414,25 @@ function renderPapers() {
     currentPagePapers.forEach((paper, index) => {
         const paperIndex = startIndex + index + 1;
         const row = document.createElement('tr');
+        row.dataset.id = paper.id || paper.link; // 使用ID或链接作为标识符
         
-        // 创建标题单元格
+        // 添加勾选框单元格（第1列）
+        const checkboxCell = document.createElement('td');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = selectedPaperIds.has(paper.id || paper.link);
+        checkbox.addEventListener('change', () => {
+            if (checkbox.checked) {
+                selectedPaperIds.add(paper.id || paper.link);
+            } else {
+                selectedPaperIds.delete(paper.id || paper.link);
+                // 如果取消选中某个论文，确保全选框不再被选中
+                selectAllPapers.checked = false;
+            }
+        });
+        checkboxCell.appendChild(checkbox);
+        
+        // 创建标题单元格（第2列）
         const titleCell = document.createElement('td');
         const titleContainer = document.createElement('div');
         titleContainer.style.display = 'flex';
@@ -422,7 +452,7 @@ function renderPapers() {
         titleContainer.appendChild(categoryDiv);
         titleCell.appendChild(titleContainer);
         
-        // 创建作者单元格
+        // 创建作者单元格（第3列）
         const authorCell = document.createElement('td');
         const authorContainer = document.createElement('div');
         authorContainer.style.height = '100%';
@@ -435,11 +465,11 @@ function renderPapers() {
         authorContainer.appendChild(authorDiv);
         authorCell.appendChild(authorContainer);
         
-        // 创建日期单元格
+        // 创建日期单元格（第4列）
         const dateCell = document.createElement('td');
         dateCell.textContent = new Date(paper.published).toLocaleDateString('zh-CN');
         
-        // 创建链接单元格
+        // 创建链接单元格（第5列）
         const linkCell = document.createElement('td');
         linkCell.className = 'link-cell';
         
@@ -450,7 +480,7 @@ function renderPapers() {
         
         linkCell.appendChild(link);
         
-        // 创建摘要单元格
+        // 创建摘要单元格（第6列）
         const summaryCell = document.createElement('td');
         
         const summaryDiv = document.createElement('div');
@@ -483,15 +513,19 @@ function renderPapers() {
         
         summaryCell.appendChild(summaryDiv);
         
-        // 将所有单元格添加到行
-        row.appendChild(titleCell);
-        row.appendChild(authorCell);
-        row.appendChild(dateCell);
-        row.appendChild(linkCell);
-        row.appendChild(summaryCell);
+        // 将所有单元格添加到行，按照表头顺序依次添加
+        row.appendChild(checkboxCell);  // 第1列：勾选框
+        row.appendChild(titleCell);     // 第2列：标题
+        row.appendChild(authorCell);    // 第3列：作者
+        row.appendChild(dateCell);      // 第4列：日期
+        row.appendChild(linkCell);      // 第5列：链接
+        row.appendChild(summaryCell);   // 第6列：摘要
         
         papersTableBody.appendChild(row);
     });
+    
+    // 更新论文的选中状态
+    updateCheckboxStates();
 }
 
 /**
@@ -1479,3 +1513,300 @@ window.addEventListener('click', (event) => {
 
 // 加载API密钥
 getApiKey();
+
+/**
+ * @description 根据搜索结果更新表格内容
+ * @param {Array} results 搜索结果数组
+ */
+function updateTable(results) {
+    papersTableBody.innerHTML = '';
+    console.log('更新表格，结果数量:', results.length);
+
+    results.forEach(paper => {
+        const row = document.createElement('tr');
+        row.dataset.id = paper.id || paper.link; // 使用ID或链接作为标识符
+        
+        // 添加勾选框单元格 (第1列)
+        const checkboxCell = document.createElement('td');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = selectedPaperIds.has(paper.id || paper.link);
+        checkbox.addEventListener('change', () => {
+            if (checkbox.checked) {
+                selectedPaperIds.add(paper.id || paper.link);
+            } else {
+                selectedPaperIds.delete(paper.id || paper.link);
+                // 如果取消选中某个论文，确保全选框不再被选中
+                selectAllPapers.checked = false;
+            }
+        });
+        checkboxCell.appendChild(checkbox);
+        row.appendChild(checkboxCell);
+
+        // 标题单元格 (第2列)
+        const titleCell = document.createElement('td');
+        titleCell.className = 'title-cell';
+        titleCell.textContent = paper.title;
+        row.appendChild(titleCell);
+
+        // 作者单元格 (第3列)
+        const authorsCell = document.createElement('td');
+        authorsCell.className = 'authors-cell';
+        authorsCell.textContent = Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors;
+        row.appendChild(authorsCell);
+
+        // 日期单元格 (第4列)
+        const dateCell = document.createElement('td');
+        dateCell.textContent = new Date(paper.published).toLocaleDateString();
+        row.appendChild(dateCell);
+
+        // 链接单元格 (第5列)
+        const linkCell = document.createElement('td');
+        linkCell.className = 'link-cell';
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = '查看';
+        link.onclick = (e) => {
+            e.preventDefault();
+            window.electronAPI.openExternal(paper.link);
+        };
+        linkCell.appendChild(link);
+        row.appendChild(linkCell);
+
+        // 摘要单元格 (第6列)
+        const abstractCell = document.createElement('td');
+        abstractCell.className = 'abstract-cell';
+        abstractCell.textContent = paper.summary;
+        row.appendChild(abstractCell);
+
+        papersTableBody.appendChild(row);
+    });
+
+    // 更新论文的选中状态
+    updateCheckboxStates();
+}
+
+/**
+ * @description 更新全选和所有复选框的状态
+ */
+function updateCheckboxStates() {
+    const checkboxes = papersTableBody.querySelectorAll('input[type="checkbox"]');
+    const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
+    selectAllPapers.checked = allChecked;
+}
+
+/**
+ * @description 处理全选/取消全选
+ */
+selectAllPapers.addEventListener('change', function() {
+    const isChecked = this.checked;
+    const checkboxes = papersTableBody.querySelectorAll('input[type="checkbox"]');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = isChecked;
+        const paperId = checkbox.closest('tr').dataset.id;
+        
+        if (isChecked) {
+            selectedPaperIds.add(paperId);
+        } else {
+            selectedPaperIds.delete(paperId);
+        }
+    });
+});
+
+/**
+ * @description 格式化论文数据导出为JSON
+ * @param {Boolean} translated 是否导出翻译后的数据
+ * @returns {Object} 格式化后的论文数据
+ */
+function formatPapersForExport(translated = false) {
+    const papers = translated && isTranslated ? allPapers : originalPapers;
+    const selectedPapers = papers.filter(paper => selectedPaperIds.has(paper.id || paper.link));
+    
+    // 如果没有选中任何论文，默认导出全部
+    const papersToExport = selectedPapers.length > 0 ? selectedPapers : papers;
+    
+    // 去重处理 - 基于链接
+    const uniquePapers = [];
+    const linkSet = new Set();
+    
+    papersToExport.forEach(paper => {
+        const paperLink = paper.link || '';
+        if (!linkSet.has(paperLink)) {
+            linkSet.add(paperLink);
+            uniquePapers.push({
+                title: paper.title,
+                authors: paper.authors,
+                published: paper.published,
+                link: paper.link,
+                summary: paper.summary,
+                categories: paper.categories || [],
+                translated: translated && isTranslated
+            });
+        }
+    });
+    
+    return {
+        timestamp: new Date().toISOString(),
+        count: uniquePapers.length,
+        papers: uniquePapers
+    };
+}
+
+/**
+ * @description 处理导出按钮点击
+ */
+exportButton.addEventListener('click', async function() {
+    // 检查是否有论文数据
+    if (allPapers.length === 0) {
+        alert('没有可导出的论文数据，请先搜索论文');
+        return;
+    }
+    
+    // 检查是否有选中的论文
+    if (selectedPaperIds.size === 0) {
+        // 提示用户是否导出所有论文
+        if (!confirm(`您当前没有选择任何论文，是否导出全部 ${allPapers.length} 篇论文？`)) {
+            return;
+        }
+    }
+    
+    // 如果已设置导出路径，直接导出
+    if (exportPath) {
+        exportPapers();
+    } else {
+        // 显示导出路径选择弹窗
+        exportModal.style.display = 'block';
+    }
+});
+
+/**
+ * @description 显示导出消息
+ * @param {String} message 消息内容
+ * @param {String} type 消息类型 ('warning', 'success', 'error')
+ */
+function showExportMessage(message, type = 'warning') {
+    exportMessage.textContent = message;
+    exportMessage.className = `export-message export-${type}`;
+    exportMessage.style.display = 'block';
+    
+    // 5秒后自动隐藏
+    setTimeout(() => {
+        exportMessage.style.display = 'none';
+    }, 5000);
+}
+
+/**
+ * @description 导出论文数据为JSON文件
+ */
+async function exportPapers() {
+    try {
+        if (!exportPath) {
+            // 如果没有设置导出路径，提示用户先设置
+            exportModal.style.display = 'block';
+            return;
+        }
+        
+        // 显示文件名输入弹窗
+        const defaultFileName = `arxiv-papers-${new Date().toISOString().slice(0, 10)}`;
+        const fileName = prompt('请输入文件名（不含扩展名）', defaultFileName);
+        
+        // 如果用户取消，则中止导出
+        if (fileName === null) {
+            return;
+        }
+        
+        // 如果用户输入了空文件名，使用默认文件名
+        const finalFileName = fileName.trim() ? `${fileName.trim()}.json` : `${defaultFileName}.json`;
+        
+        const isExportTranslated = isTranslated;
+        const data = formatPapersForExport(isExportTranslated);
+        const filePath = `${exportPath}/${finalFileName}`;
+        
+        // 调用主进程保存文件
+        const result = await window.electronAPI.saveFile(filePath, JSON.stringify(data, null, 2));
+        
+        if (result.success) {
+            alert(`导出成功！已保存 ${data.count} 篇论文到:\n${result.path}`);
+        } else {
+            alert(`导出失败: ${result.error}`);
+        }
+    } catch (error) {
+        console.error('导出论文时出错:', error);
+        alert(`导出失败: ${error.message}`);
+    }
+}
+
+/**
+ * @description 处理导出路径选择按钮
+ */
+confirmExport.addEventListener('click', async function() {
+    try {
+        const selectedPath = await window.electronAPI.selectDirectory();
+        if (selectedPath) {
+            exportPath = selectedPath;
+            paperExportPath.value = selectedPath;
+            
+            // 保存到本地存储
+            localStorage.setItem('paperExportPath', selectedPath);
+            
+            // 关闭弹窗并执行导出
+            exportModal.style.display = 'none';
+            exportPapers();
+        }
+    } catch (error) {
+        console.error('选择导出路径时出错:', error);
+        showExportMessage(`选择路径失败: ${error.message}`, 'error');
+    }
+});
+
+/**
+ * @description 处理设置页面中的选择路径按钮
+ */
+selectPathButton.addEventListener('click', async function() {
+    try {
+        const selectedPath = await window.electronAPI.selectDirectory();
+        if (selectedPath) {
+            exportPath = selectedPath;
+            paperExportPath.value = selectedPath;
+            
+            // 保存到本地存储
+            localStorage.setItem('paperExportPath', selectedPath);
+            
+            // 显示成功消息
+            settingsStatusMessage.textContent = '导出路径已成功保存';
+            settingsStatusMessage.className = 'status-message success';
+            settingsStatusMessage.style.display = 'block';
+            
+            // 3秒后隐藏消息
+            setTimeout(() => {
+                settingsStatusMessage.style.display = 'none';
+            }, 3000);
+        }
+    } catch (error) {
+        console.error('选择导出路径时出错:', error);
+        settingsStatusMessage.textContent = `选择路径失败: ${error.message}`;
+        settingsStatusMessage.className = 'status-message error';
+        settingsStatusMessage.style.display = 'block';
+    }
+});
+
+/**
+ * @description 处理导出弹窗关闭
+ */
+function closeExportModalHandler() {
+    exportModal.style.display = 'none';
+    exportMessage.style.display = 'none';
+}
+
+closeExportModal.addEventListener('click', closeExportModalHandler);
+cancelExport.addEventListener('click', closeExportModalHandler);
+
+// 加载保存的导出路径
+document.addEventListener('DOMContentLoaded', function() {
+    const savedPath = localStorage.getItem('paperExportPath');
+    if (savedPath) {
+        exportPath = savedPath;
+        paperExportPath.value = savedPath;
+    }
+});

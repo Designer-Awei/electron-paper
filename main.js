@@ -116,6 +116,20 @@ app.whenReady().then(() => {
   // 设置IPC监听器
   ipcMain.handle('get-api-key', () => getApiKey());
   ipcMain.handle('save-api-key', (event, apiKey) => saveApiKey(apiKey));
+  
+  // 添加选择目录的IPC处理程序
+  ipcMain.handle('select-directory', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+      title: '选择导出文件保存位置'
+    });
+    
+    if (result.canceled) {
+      return null;
+    }
+    
+    return result.filePaths[0];
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

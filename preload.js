@@ -304,6 +304,63 @@ async function translateText(text, apiKey) {
     }
 }
 
+/**
+ * @description 保存API密钥和翻译模型设置
+ * @param {Object} settings - 设置对象
+ * @returns {Promise<boolean>} 是否保存成功
+ */
+async function saveSettings(settings) {
+    try {
+        const configPath = path.join(app.getPath('userData'), 'config.json');
+        let configData = {};
+        
+        // 如果配置文件已存在，读取它
+        if (fs.existsSync(configPath)) {
+            configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        }
+        
+        // 更新配置
+        configData = { ...configData, ...settings };
+        
+        // 保存配置
+        fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+        return true;
+    } catch (error) {
+        console.error('保存设置失败:', error);
+        return false;
+    }
+}
+
+/**
+ * @description 选择目录
+ * @returns {Promise<string|null>} 选择的目录路径或null
+ */
+async function selectDirectory() {
+    try {
+        const result = await ipcRenderer.invoke('select-directory');
+        return result || null;
+    } catch (error) {
+        console.error('选择目录失败:', error);
+        return null;
+    }
+}
+
+/**
+ * @description 保存文件
+ * @param {string} filePath - 文件路径
+ * @param {string} content - 文件内容
+ * @returns {Promise<Object>} 保存结果
+ */
+async function saveFile(filePath, content) {
+    try {
+        fs.writeFileSync(filePath, content, 'utf8');
+        return { success: true, path: filePath };
+    } catch (error) {
+        console.error('保存文件失败:', error);
+        return { success: false, error: error.message, path: filePath };
+    }
+}
+
 // 暴露安全的API给渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
     versions: {
@@ -327,5 +384,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
             }
             throw new Error(`不允许调用 ${channel}`);
         }
-    }
+    },
+    // 文件和目录操作
+    selectDirectory: () => selectDirectory(),
+    saveFile: (filePath, content) => saveFile(filePath, content)
 }); 

@@ -307,11 +307,12 @@
             word-wrap: break-word;
             vertical-align: top;
         }
-        th:nth-child(1) { width: 20%; }
-        th:nth-child(2) { width: 15%; }
-        th:nth-child(3) { width: 15%; }
-        th:nth-child(4) { width: 10%; }
-        th:nth-child(5) { width: 40%; }
+        th:nth-child(1) { width: 5%; text-align: center; } /* 勾选框列 */
+        th:nth-child(2) { width: 20%; } /* 标题列 */
+        th:nth-child(3) { width: 15%; } /* 作者列 */
+        th:nth-child(4) { width: 10%; } /* 发布日期列 */
+        th:nth-child(5) { width: 10%; } /* 链接列 */
+        th:nth-child(6) { width: 40%; } /* 摘要列 */
 
         /* 新增的样式 */
         td {
@@ -681,6 +682,34 @@
             background-color: #d32f2f;
         }
         
+        /* 导出按钮样式 */
+        .export-button {
+            padding: 6px 12px;
+            margin-left: 10px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .export-button:hover {
+            background-color: #0b7dda;
+        }
+        
+        /* 勾选框样式 */
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        /* 为勾选框列添加单独样式 */
+        td:first-child {
+            text-align: center;
+        }
+        
         /* 翻译API密钥弹窗 */
         .modal {
             display: none;
@@ -792,6 +821,54 @@
             background-color: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+        
+        /* 导出弹窗样式 */
+        #exportModal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        
+        .export-modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 500px;
+            max-width: 90%;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .export-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .export-message {
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .export-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        
+        .export-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
         }
     </style>
 </head>
@@ -933,6 +1010,17 @@
                 </div>
             </div>
             
+            <div class="form-group">
+                <label for="paperExportPath">论文存放地址</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="paperExportPath" placeholder="选择导出的JSON文件保存路径" class="full-width-input" readonly>
+                    <button id="selectPathButton" class="secondary-button" style="width: auto; min-width: 90px; white-space: nowrap; padding: 0 12px;">选择路径</button>
+                </div>
+                <div class="description">
+                    设置导出论文JSON文件的存放位置。若未设置，将在首次导出时提示选择。
+                </div>
+            </div>
+            
             <div id="settingsStatusMessage" class="status-message"></div>
             
             <div class="button-container" style="justify-content: flex-end; margin-top: 24px;">
@@ -947,12 +1035,14 @@
             <span id="pageInfo">第 1 页</span>
             <button id="nextPage">下一页</button>
             <button id="translateButton" class="translate-button">翻译</button>
+            <button id="exportButton" class="export-button">导出</button>
         </div>
         <div id="loading" class="loading">正在加载...</div>
         <div id="error" class="error"></div>
         <table id="papersTable">
             <thead>
                 <tr>
+                    <th><input type="checkbox" id="selectAllPapers"></th>
                     <th>标题</th>
                     <th>作者</th>
                     <th>发布日期</th>
@@ -964,6 +1054,23 @@
             </tbody>
         </table>
     </div>
+    
+    <!-- 导出路径选择弹窗 -->
+    <div id="exportModal" class="modal">
+        <div class="export-modal-content">
+            <div class="export-modal-header">
+                <h2>选择导出路径</h2>
+                <button class="close-button" id="closeExportModal">&times;</button>
+            </div>
+            <p>请选择JSON文件保存位置：</p>
+            <div id="exportMessage" class="export-message" style="display: none;"></div>
+            <div class="modal-footer">
+                <button id="cancelExport" class="secondary-button">取消</button>
+                <button id="confirmExport" class="primary-button">选择文件夹</button>
+            </div>
+        </div>
+    </div>
+
     <script src="./renderer.js"></script>
 </body>
 </html> 
