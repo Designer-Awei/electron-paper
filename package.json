@@ -1,39 +1,93 @@
 {
   "name": "electron-paper",
   "version": "1.0.0",
-  "description": "An Electron based application",
+  "description": "Knowledge Base with Offline Reading Capabilities",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "cross-env NODE_ENV=development electron .",
-    "dev:win": "start-dev.bat",
-    "dist:simple": "electron-packager . --platform=win32 --arch=x64 --out=dist --icon=E-paper.ico --overwrite"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Designer-Awei/electron-paper.git"
+    "dev": "electron .",
+    "dist:simple": "npx electron-packager . --platform=win32 --arch=x64 --out=dist --overwrite",
+    "build": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_CUSTOM_DIR=28.3.3 electron-packager . --platform=win32 --arch=x64 --out=dist --icon=E-paper.ico --overwrite",
+    "build-nsis": "npm run build && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npx electron-builder --win --x64"
   },
   "keywords": [
-    "electron",
-    "desktop"
+    "Electron",
+    "offline reader",
+    "knowledge base"
   ],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/Designer-Awei/electron-paper/issues"
+  "author": "Your Name",
+  "license": "MIT",
+  "config": {
+    "forge": {
+      "packagerConfig": {},
+      "makers": [
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {
+            "name": "electron_paper"
+          }
+        },
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": [
+            "darwin"
+          ]
+        },
+        {
+          "name": "@electron-forge/maker-deb",
+          "config": {}
+        },
+        {
+          "name": "@electron-forge/maker-rpm",
+          "config": {}
+        }
+      ]
+    }
   },
-  "homepage": "https://github.com/Designer-Awei/electron-paper#readme",
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "electron": "^28.0.0",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
     "electron-packager": "^17.1.2",
-    "electron-reloader": "^1.2.3",
-    "electron-winstaller": "^5.4.0"
+    "electron-squirrel-startup": "^1.0.0"
   },
   "dependencies": {
-    "@electron/remote": "^2.1.2",
-    "axios": "^1.8.4",
-    "xml2js": "^0.6.2"
+    "markdown-it": "^14.0.0"
+  },
+  "build": {
+    "appId": "com.your-company.electron-paper",
+    "productName": "Electron Paper",
+    "directories": {
+      "output": "dist"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "installer.nsh"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "E-paper.ico"
+    },
+    "fileAssociations": [
+      {
+        "ext": "md",
+        "name": "Markdown",
+        "description": "Markdown File"
+      }
+    ],
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/",
+      "customDir": "28.3.3"
+    },
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
   }
 }

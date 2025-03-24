@@ -272,18 +272,18 @@ window.searchPapers = async function() {
     const tempSearchData = {...searchData};
     
     try {
-        // 调用原始搜索函数
-        const result = await originalSearchPapers();
-        
-        // 只有在搜索结果有效且不是从历史记录应用时，才添加到历史记录
-        if (!isApplyingFromHistory && allPapers && allPapers.length > 0) {
-            addToHistory(tempSearchData);
-        }
-        
-        // 重置标志位
-        isApplyingFromHistory = false;
-        
-        return result;
+    // 调用原始搜索函数
+    const result = await originalSearchPapers();
+    
+    // 只有在搜索结果有效且不是从历史记录应用时，才添加到历史记录
+    if (!isApplyingFromHistory && allPapers && allPapers.length > 0) {
+        addToHistory(tempSearchData);
+    }
+    
+    // 重置标志位
+    isApplyingFromHistory = false;
+    
+    return result;
     } catch (error) {
         console.error('搜索出错:', error);
         isApplyingFromHistory = false;
@@ -2467,7 +2467,7 @@ function updateDetailContent(item) {
     if ((item.translatedTitle || item.translatedSummary) && (item.originalTitle || item.originalSummary)) {
         toggleLanguageButton.textContent = isShowingOriginal ? '显示中文' : '显示原文';
         languageToggleContainer.style.display = 'flex';
-    } else {
+        } else {
         languageToggleContainer.style.display = 'none';
     }
     
