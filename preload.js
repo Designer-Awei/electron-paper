@@ -285,40 +285,54 @@ async function saveApiKey(apiKey) {
  * @description 翻译文本
  * @param {string} text - 待翻译的文本
  * @param {string} apiKey - API密钥
- * @param {string} model - 翻译模型，默认为Qwen/Qwen2.5-7B-Instruct
+ * @param {string} model - 翻译模型，默认为THUDM/glm-4-9b-chat
  * @returns {Promise<string>} 翻译后的文本
  */
-async function translateText(text, apiKey, model = 'Qwen/Qwen2.5-7B-Instruct') {
+async function translateText(text, apiKey, model = 'THUDM/glm-4-9b-chat') {
     try {
+        if (!text) return '';
+        if (!apiKey) throw new Error('缺少API密钥');
+        
         // 确保文本不超过模型最大上下文长度
         const maxLength = 12000; // 保守估计，32k的三分之一左右
         const truncatedText = text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
         
-        console.log(`使用模型 ${model} 进行翻译`);
+        console.log(`使用模型 ${model} 进行翻译，文本长度: ${text.length} 字符`);
         
-        const response = await axios.post('https://api.siliconflow.cn/v1/chat/completions', {
-            model: model, // 使用传入的模型参数
+        const requestData = {
+            model: model,
             messages: [
                 { role: 'system', content: '你是一个专业的翻译助手，你的任务是将英文文本准确地翻译成中文，保持专业术语的准确性。只返回翻译结果，不要解释或添加任何其他内容。' },
                 { role: 'user', content: `将以下文本翻译成中文：\n\n${truncatedText}` }
             ],
             max_tokens: 4000
-        }, {
+        };
+        
+        console.log('发送翻译请求:', JSON.stringify(requestData).substring(0, 200) + '...');
+        
+        const response = await axios.post('https://api.siliconflow.cn/v1/chat/completions', requestData, {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`
-            }
+            },
+            timeout: 60000 // 增加超时时间到60秒
         });
         
+        console.log('翻译API响应状态:', response.status);
+        
         if (response.data && response.data.choices && response.data.choices.length > 0) {
-            return response.data.choices[0].message.content;
+            const translatedText = response.data.choices[0].message.content;
+            console.log('翻译成功，返回内容长度:', translatedText.length);
+            return translatedText;
         }
         
+        console.error('API响应格式异常:', JSON.stringify(response.data));
         throw new Error('翻译API返回格式异常');
     } catch (error) {
         console.error('翻译失败:', error.message);
         if (error.response) {
-            console.error('API错误:', error.response.data);
+            console.error('API错误状态码:', error.response.status);
+            console.error('API错误详情:', JSON.stringify(error.response.data));
         }
         throw new Error('翻译失败：' + (error.response?.data?.error?.message || error.message));
     }

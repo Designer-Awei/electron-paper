@@ -355,9 +355,13 @@ app.whenReady().then(() => {
     // 获取当前窗口
     const focusedWindow = BrowserWindow.getFocusedWindow();
     
+    // 创建包含当前日期时间的默认文件名
+    const now = new Date();
+    const dateTimeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+    
     // 确保文件名中含有扩展名
-    const defaultFileName = options.defaultValue || 'arxiv-papers';
-    const defaultPath = defaultFileName.endsWith('.json') ? defaultFileName : `${defaultFileName}.json`;
+    const defaultFileName = options.defaultValue ? options.defaultValue.replace('.json', '') : 'arxiv-papers';
+    const defaultPath = `${defaultFileName}_${dateTimeStr}.json`;
     
     // 使用保存文件对话框让用户输入文件名
     const result = await dialog.showSaveDialog(focusedWindow, {

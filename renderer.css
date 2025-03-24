@@ -1,0 +1,27 @@
+/* 语言切换按钮容器 */
+.language-toggle-container {
+    display: flex;
+    justify-content: flex-end;
+    margin: 10px 0;
+}
+
+.language-toggle-button {
+    padding: 5px 10px;
+    background-color: #f3f3f3;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.language-toggle-button:hover {
+    background-color: #e0e0e0;
+}
+
+/* 详情页摘要容器 */
+.detail-abstract-container {
+    margin-top: 10px;
+    border-top: 1px solid #eee;
+    padding-top: 10px;
+} 
