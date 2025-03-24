@@ -225,12 +225,12 @@
             background-color: #0d62d1;
         }
         .secondary-button {
-            background-color: #f0f0f0;
-            color: #333;
+            background-color: #e8f0fe;
+            color: #1a73e8;
             margin-right: 0; /* 移除右边距 */
         }
         .secondary-button:hover {
-            background-color: #e0e0e0;
+            background-color: #d4e6fc;
         }
         .danger-button {
             background-color: #f44336;
@@ -750,17 +750,16 @@
             font-size: 24px;
             cursor: pointer;
             color: #aaa;
+            padding: 0;
+            margin: 0;
             position: absolute;
             right: 0;
             top: 0;
-            padding: 0;
-            margin: 0;
-            width: 30px;
-            height: 30px;
+            width: 32px;
+            height: 32px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: color 0.2s ease;
         }
         
         .close-button:hover {
@@ -934,7 +933,7 @@
             flex-direction: column;
             cursor: pointer;
             transition: all 0.3s ease;
-            height: 220px;
+            height: 220px; /* 增加卡片高度从180px到220px */
             position: relative;
             overflow: hidden;
         }
@@ -949,11 +948,13 @@
             font-size: 16px;
             margin-bottom: 10px;
             display: -webkit-box;
-            -webkit-line-clamp: 3;
+            -webkit-line-clamp: 3; /* 固定显示3行 */
             -webkit-box-orient: vertical;
             overflow: hidden;
             text-overflow: ellipsis;
-            flex: 1;
+            flex: 0 0 auto; /* 修改为固定高度，而非flex: 1 */
+            padding-right: 45px; /* 给"已读"标签预留空间 */
+            min-height: 60px; /* 确保标题有足够的最小高度显示3行 */
         }
         
         .card-authors {
@@ -965,6 +966,7 @@
             -webkit-box-orient: vertical;
             overflow: hidden;
             text-overflow: ellipsis;
+            min-height: 32px; /* 添加最小高度确保能显示2行作者 */
         }
         
         .card-categories {
@@ -972,6 +974,7 @@
             flex-wrap: wrap;
             gap: 4px;
             margin-bottom: 8px;
+            min-height: 28px; /* 添加最小高度确保分类标签区域显示完整 */
         }
         
         .card-category {
@@ -1081,6 +1084,7 @@
             margin-bottom: 20px;
             border-bottom: 1px solid #eee;
             padding-bottom: 16px;
+            position: relative; /* 添加相对定位 */
         }
         
         .detail-title {
@@ -1088,6 +1092,16 @@
             font-weight: 600;
             color: #333;
             margin-right: 40px;
+            line-height: 1.4; /* 添加行高提高可读性 */
+            width: calc(100% - 40px); /* 考虑右侧关闭按钮的空间 */
+            word-break: break-word; /* 允许在任何字符处换行 */
+        }
+        
+        /* 增加标题在不同断点的处理 */
+        @media (max-width: 768px) and (min-width: 481px) {
+            .detail-title {
+                font-size: 22px; /* 保持相同字体大小 */
+            }
         }
         
         .detail-close {
@@ -1098,6 +1112,15 @@
             color: #666;
             padding: 0;
             margin: 0;
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
         }
         
         .detail-meta {
@@ -1206,6 +1229,65 @@
             .modal-options button {
                 min-width: 100%;
                 white-space: normal;
+            }
+        }
+
+        /* 添加语言切换容器样式 */
+        .language-toggle-container {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: nowrap;
+            justify-content: flex-start;
+            width: 100%;
+        }
+
+        .language-toggle-button, 
+        #linkButton, 
+        #markReadButton {
+            white-space: nowrap;
+            flex: 1;
+            max-width: 120px;
+            padding: 8px 12px;
+            font-size: 14px;
+            border-radius: 6px;
+            text-align: center;
+            box-sizing: border-box;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 在窄屏上调整按钮但保持字体大小不变 */
+        @media (max-width: 480px) {
+            .language-toggle-button, 
+            #linkButton, 
+            #markReadButton {
+                padding: 6px 10px;
+                font-size: 14px; /* 保持与普通屏幕相同的字体大小 */
+                max-width: none; /* 移除最大宽度限制 */
+            }
+            .language-toggle-container {
+                gap: 8px;
+                justify-content: space-between;
+            }
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 480px) {
+            .detail-content {
+                width: 95%;
+                padding: 16px;
+            }
+            .detail-title {
+                font-size: 22px; /* 保持与普通屏幕相同的字体大小 */
+                margin-right: 32px; /* 减小右边距，为关闭按钮留出空间 */
+            }
+            .detail-abstract {
+                padding: 12px;
             }
         }
     </style>
@@ -1473,6 +1555,8 @@
             <!-- 添加语言切换按钮区域 -->
             <div class="language-toggle-container" id="languageToggleContainer">
                 <button id="toggleLanguageButton" class="secondary-button language-toggle-button">显示原文</button>
+                <button id="linkButton" class="secondary-button">原文链接</button>
+                <!-- markReadButton会通过JavaScript动态添加 -->
             </div>
             <div class="detail-abstract-container">
                 <div class="detail-abstract" id="detailAbstract"></div>

@@ -271,18 +271,24 @@ window.searchPapers = async function() {
     // 我们会在搜索结果返回后，只有在有结果时才添加
     const tempSearchData = {...searchData};
     
-    // 调用原始搜索函数
-    const result = await originalSearchPapers();
-    
-    // 只有在搜索结果有效且不是从历史记录应用时，才添加到历史记录
-    if (!isApplyingFromHistory && allPapers && allPapers.length > 0) {
-        addToHistory(tempSearchData);
+    try {
+        // 调用原始搜索函数
+        const result = await originalSearchPapers();
+        
+        // 只有在搜索结果有效且不是从历史记录应用时，才添加到历史记录
+        if (!isApplyingFromHistory && allPapers && allPapers.length > 0) {
+            addToHistory(tempSearchData);
+        }
+        
+        // 重置标志位
+        isApplyingFromHistory = false;
+        
+        return result;
+    } catch (error) {
+        console.error('搜索出错:', error);
+        isApplyingFromHistory = false;
+        throw error; // 继续抛出错误以便上层处理
     }
-    
-    // 重置标志位
-    isApplyingFromHistory = false;
-    
-    return result;
 };
 
 /**
@@ -871,52 +877,20 @@ function saveSearchHistory(history) {
 
 /**
  * @description 添加搜索记录到历史
- * @param {Object} searchData 搜索条件数据
+ * @param {Object} searchData 搜索数据
  */
 function addToHistory(searchData) {
     const history = getSearchHistory();
+    const favorites = getFavorites();
     
-    // 检查是否有完全相同的搜索条件已存在于历史记录中
-    const isDuplicate = history.some(item => {
-        // 检查主要搜索条件是否相同
-        const basicConditionsMatch = (
-            item.searchField === searchData.searchField &&
-            item.searchInput === searchData.searchInput &&
-            item.timeRange === searchData.timeRange &&
-            item.sortBy === searchData.sortBy &&
-            item.sortOrder === searchData.sortOrder &&
-            item.maxResults === searchData.maxResults
-        );
-        
-        // 如果基本条件不匹配，直接返回false
-        if (!basicConditionsMatch) return false;
-        
-        // 检查额外搜索字段是否匹配
-        // 首先检查长度是否相同
-        if ((item.additionalFields?.length || 0) !== (searchData.additionalFields?.length || 0)) {
-            return false;
-        }
-        
-        // 如果没有额外字段，则视为匹配
-        if (!item.additionalFields || item.additionalFields.length === 0) {
-            return true;
-        }
-        
-        // 检查每个额外字段是否都匹配
-        // 注意：这个实现假设额外字段的顺序也必须相同
-        return item.additionalFields.every((field, index) => {
-            const newField = searchData.additionalFields[index];
-            return (
-                field.field === newField.field &&
-                field.term === newField.term &&
-                field.operator === newField.operator
-            );
-        });
-    });
+    // 首先检查搜索条件是否与历史记录中的某项匹配
+    // 或者是否与收藏夹中的某项匹配（仅检查核心搜索条件）
+    const isDuplicate = history.some(item => isSameSearchCriteria(item, searchData)) || 
+                         favorites.some(item => isSameSearchCriteria(item, searchData));
     
     // 如果是重复的搜索条件，则不添加到历史记录
     if (isDuplicate) {
-        console.log('搜索条件重复，不添加到历史记录');
+        console.log('搜索条件重复或与收藏记录匹配，不添加到历史记录');
         return;
     }
     
@@ -939,6 +913,51 @@ function addToHistory(searchData) {
 }
 
 /**
+ * @description 判断两个搜索条件是否匹配
+ * @param {Object} item1 搜索条件1
+ * @param {Object} item2 搜索条件2
+ * @returns {Boolean} 是否匹配
+ */
+function isSameSearchCriteria(item1, item2) {
+    // 检查主搜索字段和额外字段是否相同
+    // 如果主搜索内容不同，或者搜索字段类型不同，则认为是不同的搜索
+    if (item1.searchInput !== item2.searchInput || item1.searchField !== item2.searchField) {
+        return false;
+    }
+    
+    // 检查额外搜索字段是否匹配
+    const additionalFields1 = item1.additionalFields || [];
+    const additionalFields2 = item2.additionalFields || [];
+    
+    // 如果额外字段数量不同，认为是不同的搜索
+    if (additionalFields1.length !== additionalFields2.length) {
+        return false;
+    }
+    
+    // 检查每个额外字段是否都匹配
+    for (let i = 0; i < additionalFields1.length; i++) {
+        const field1 = additionalFields1[i];
+        const field2 = additionalFields2[i];
+        
+        if (field1.field !== field2.field || field1.term !== field2.term || field1.operator !== field2.operator) {
+            return false;
+        }
+    }
+    
+    // 核心搜索内容匹配，现在检查是否仅有次要条件不同
+    // 包括：时间范围、排序方式、排序顺序、结果限制
+    const isOnlySecondaryDifferent = 
+        (item1.timeRange !== item2.timeRange) ||
+        (item1.sortBy !== item2.sortBy) ||
+        (item1.sortOrder !== item2.sortOrder) ||
+        (item1.maxResults !== item2.maxResults);
+    
+    // 如果只有次要条件不同，我们认为它们是相同的搜索
+    // 返回true表示匹配，因此不会添加到历史记录
+    return true; // 只要核心搜索条件匹配，就视为相同搜索
+}
+
+/**
  * @description 从历史记录中删除指定项
  * @param {number} id 历史记录ID
  */
@@ -955,6 +974,56 @@ function removeFromHistory(id) {
 function clearHistory() {
     localStorage.removeItem(HISTORY_KEY);
     renderSearchHistory();
+}
+
+/**
+ * @description 应用搜索条件到界面
+ * @param {Object} searchItem 搜索条件项
+ */
+function applySearchConditions(searchItem) {
+    // 设置搜索字段
+    document.getElementById('searchField').value = searchItem.searchField;
+    document.getElementById('searchInput').value = searchItem.searchInput;
+    
+    // 设置时间范围
+    document.getElementById('timeRange').value = searchItem.timeRange;
+    
+    // 设置排序条件
+    document.getElementById('sortBy').value = searchItem.sortBy;
+    document.getElementById('sortOrder').value = searchItem.sortOrder;
+    
+    // 设置结果限制
+    document.getElementById('maxResults').value = searchItem.maxResults;
+    
+    // 清空额外字段容器
+    const additionalFieldsContainer = document.getElementById('additionalFields');
+    additionalFieldsContainer.innerHTML = '';
+    
+    // 如果有额外的搜索字段，重新创建它们
+    if (searchItem.additionalFields && searchItem.additionalFields.length > 0) {
+        searchItem.additionalFields.forEach(field => {
+            // 创建新的搜索字段行
+            const fieldRow = createSearchFieldRow();
+            
+            // 设置搜索字段值
+            const fieldSelect = fieldRow.querySelector('.search-field');
+            const fieldInput = fieldRow.querySelector('.search-input');
+            const fieldOperator = fieldRow.querySelector('.search-operator');
+            
+            if (fieldSelect) fieldSelect.value = field.field;
+            if (fieldInput) fieldInput.value = field.term;
+            if (fieldOperator) fieldOperator.value = field.operator;
+            
+            // 添加到额外字段容器
+            additionalFieldsContainer.appendChild(fieldRow);
+        });
+    }
+    
+    // 切换到主搜索界面
+    document.getElementById('mainSearchTab').click();
+    
+    // 执行搜索
+    searchPapers();
 }
 
 /**
@@ -986,49 +1055,38 @@ function applyHistorySearch(historyItem) {
         renderSearchHistory();
     }
     
-    // 设置搜索字段
-    document.getElementById('searchField').value = historyItem.searchField;
-    document.getElementById('searchInput').value = historyItem.searchInput;
+    // 应用搜索条件
+    applySearchConditions(historyItem);
+}
+
+/**
+ * @description 从收藏夹中应用搜索条件
+ * @param {Object} favoriteItem 收藏记录项
+ */
+function applyFavoriteSearch(favoriteItem) {
+    // 设置标志位，表示当前搜索来自收藏夹应用
+    isApplyingFromHistory = true;
     
-    // 设置时间范围
-    document.getElementById('timeRange').value = historyItem.timeRange;
+    // 将使用的收藏记录更新时间戳
+    const favorites = getFavorites();
+    const itemIndex = favorites.findIndex(item => item.id === favoriteItem.id);
     
-    // 设置排序条件
-    document.getElementById('sortBy').value = historyItem.sortBy;
-    document.getElementById('sortOrder').value = historyItem.sortOrder;
-    
-    // 设置结果限制
-    document.getElementById('maxResults').value = historyItem.maxResults;
-    
-    // 清空额外字段容器
-    const additionalFieldsContainer = document.getElementById('additionalFields');
-    additionalFieldsContainer.innerHTML = '';
-    
-    // 如果有额外的搜索字段，重新创建它们
-    if (historyItem.additionalFields && historyItem.additionalFields.length > 0) {
-        historyItem.additionalFields.forEach(field => {
-            // 创建新的搜索字段行
-            const fieldRow = createSearchFieldRow();
-            
-            // 设置搜索字段值
-            const fieldSelect = fieldRow.querySelector('.search-field');
-            const fieldInput = fieldRow.querySelector('.search-input');
-            const fieldOperator = fieldRow.querySelector('.search-operator');
-            
-            if (fieldSelect) fieldSelect.value = field.field;
-            if (fieldInput) fieldInput.value = field.term;
-            if (fieldOperator) fieldOperator.value = field.operator;
-            
-            // 添加到额外字段容器
-            additionalFieldsContainer.appendChild(fieldRow);
-        });
+    if (itemIndex !== -1) {
+        // 从收藏夹中取出这个项目
+        const item = favorites[itemIndex];
+        
+        // 更新时间戳
+        item.timestamp = new Date().toISOString();
+        
+        // 保存更新后的收藏列表
+        saveFavorites(favorites);
+        
+        // 刷新收藏夹显示
+        renderFavorites();
     }
     
-    // 切换到主搜索界面
-    document.getElementById('mainSearchTab').click();
-    
-    // 执行搜索
-    searchPapers();
+    // 应用搜索条件
+    applySearchConditions(favoriteItem);
 }
 
 /**
@@ -1311,9 +1369,9 @@ function renderFavorites() {
         
         // 为整个收藏项添加点击事件
         favoriteItem.addEventListener('click', function() {
-            const favoriteItemObj = favorites.find(h => h.id === item.id);
+            const favoriteItemObj = favorites.find(f => f.id === item.id);
             if (favoriteItemObj) {
-                applyHistorySearch(favoriteItemObj);
+                applyFavoriteSearch(favoriteItemObj);
             }
         });
         
@@ -2326,10 +2384,7 @@ function showKnowledgeBaseItemDetail(id) {
         // 显示详情页
         detailModal.style.display = 'block';
         
-        // 如果未读，则标记为已读
-        if (!item.isRead) {
-            updateKnowledgeBaseItemReadStatus(id, true);
-        }
+        // 移除自动标记为已读的逻辑
     } catch (error) {
         console.error('显示详情页失败:', error);
     }
@@ -2372,10 +2427,45 @@ function updateDetailContent(item) {
     // 更新语言切换按钮显示状态
     if (item.hasTranslation && item.originalTitle && item.originalSummary) {
         toggleLanguageButton.textContent = isShowingOriginal ? '显示中文' : '显示原文';
-        languageToggleContainer.style.display = 'block';
+        languageToggleContainer.style.display = 'flex';
     } else {
         languageToggleContainer.style.display = 'none';
     }
+    
+    // 更新文章链接按钮
+    if (item.link) {
+        linkButton.style.display = 'inline-block';
+        linkButton.onclick = () => {
+            window.electronAPI.openExternal(item.link);
+        };
+    } else {
+        linkButton.style.display = 'none';
+    }
+    
+    // 添加一个标记已读/未读按钮
+    // 首先检查是否已经存在，存在则移除
+    const existingMarkReadButton = document.getElementById('markReadButton');
+    if (existingMarkReadButton) {
+        existingMarkReadButton.remove();
+    }
+    
+    // 创建新的按钮
+    const markReadButton = document.createElement('button');
+    markReadButton.id = 'markReadButton';
+    markReadButton.className = item.isRead ? 'secondary-button' : 'primary-button';
+    markReadButton.textContent = item.isRead ? '标记为未读' : '标记为已读';
+    // 移除marginLeft，因为容器已经有gap设置了间距
+
+    // 添加点击事件
+    markReadButton.addEventListener('click', () => {
+        updateKnowledgeBaseItemReadStatus(item.link, !item.isRead);
+        // 更新按钮状态
+        markReadButton.className = !item.isRead ? 'secondary-button' : 'primary-button';
+        markReadButton.textContent = !item.isRead ? '标记为未读' : '标记为已读';
+    });
+    
+    // 添加到语言切换容器
+    languageToggleContainer.appendChild(markReadButton);
 }
 
 // 为语言切换按钮添加事件监听
