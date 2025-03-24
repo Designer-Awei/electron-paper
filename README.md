@@ -122,18 +122,15 @@ npm start
 
 ## 打包说明
 
-本项目提供完整的打包脚本，可以轻松创建便携版和安装版应用。
+本项目提供打包脚本，可以轻松创建便携版和安装版应用。
 
 ### 一键打包（推荐）
 
-使用一键打包脚本可同时生成便携版和安装版：
+使用打包脚本可同时生成便携版和安装版：
 
 ```bash
-# CMD方式运行一键打包脚本
-.\build-script.bat
-
-# 或使用PowerShell脚本(颜色提示更友好)
-PowerShell -ExecutionPolicy Bypass -File .\build-package.ps1
+# 以管理员身份运行打包脚本
+.\package.bat
 ```
 
 此脚本会自动：
@@ -178,11 +175,9 @@ electron-paper/
 ├── renderer.css    # 渲染器样式
 ├── package.json    # 项目配置和依赖
 ├── E-paper.ico     # 应用图标
-├── build/
-│   └── installer.nsh  # NSIS安装程序自定义配置
-├── build-script.bat   # CMD一键打包脚本
-├── build-package.ps1  # PowerShell一键打包脚本
-├── start-dev.bat      # 开发模式启动脚本
+├── installer.nsh   # NSIS安装程序自定义配置
+├── package.bat     # 打包脚本
+├── start-dev.bat   # 开发模式启动脚本
 └── README.md       # 项目说明
 ```
 
