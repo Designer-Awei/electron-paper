@@ -2884,3 +2884,24 @@ cancelEditNotes.addEventListener('click', () => {
     notesEditMode.style.display = 'none';
     notesViewMode.style.display = 'block';
 });
+
+// 页面加载后为特定的链接添加事件监听器
+document.addEventListener('DOMContentLoaded', () => {
+    // 为SiliconFlow链接添加点击事件
+    const siliconFlowLink = document.getElementById('siliconFlowLink');
+    if (siliconFlowLink) {
+        siliconFlowLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await window.electronAPI.openExternal('https://cloud.siliconflow.cn/account/ak');
+        });
+    }
+    
+    // 为JSON转Excel工具链接添加点击事件
+    const jsonToExcelLink = document.getElementById('jsonToExcelLink');
+    if (jsonToExcelLink) {
+        jsonToExcelLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await window.electronAPI.openExternal('https://wejson.cn/json2excel/');
+        });
+    }
+});
