@@ -80,14 +80,8 @@ if %ERRORLEVEL% neq 0 (
 echo 依赖安装完成
 echo.
 
-echo [步骤4/6] 创建便携版应用...
-call npm run build
-if %ERRORLEVEL% neq 0 (
-    echo 错误: 创建便携版失败
-    pause
-    exit /b 1
-)
-echo 便携版创建完成
+echo [步骤4/6] 跳过，不再单独创建便携版...
+echo 将直接使用electron-builder创建安装程序和便携版...
 echo.
 
 echo [步骤5/6] 预下载electron二进制文件...
@@ -131,13 +125,6 @@ if %ERRORLEVEL% neq 0 (
     if %ERRORLEVEL% neq 0 (
         echo 第二次尝试失败，使用离线方式创建安装程序...
         
-        echo 创建目标文件夹...
-        mkdir dist\Electron-Paper-portable 2>nul
-        
-        echo 复制便携版文件...
-        xcopy "dist\electron-paper-win32-x64\*" "dist\Electron-Paper-portable\" /E /I /H /Y
-        
-        :: 手动创建简易安装程序
         echo 创建简易安装程序脚本...
         echo @echo off > "dist\安装Electron Paper.bat"
         echo chcp 936 ^> nul >> "dist\安装Electron Paper.bat"
@@ -146,12 +133,12 @@ if %ERRORLEVEL% neq 0 (
         echo set /p INSTALL_DIR=请输入安装路径[默认:%%INSTALL_DIR%%]: >> "dist\安装Electron Paper.bat"
         echo mkdir "%%INSTALL_DIR%%" 2^>nul >> "dist\安装Electron Paper.bat"
         echo echo 正在复制文件... >> "dist\安装Electron Paper.bat"
-        echo xcopy "Electron-Paper-portable\*" "%%INSTALL_DIR%%\" /E /I /H /Y >> "dist\安装Electron Paper.bat"
+        echo xcopy "win-unpacked\*" "%%INSTALL_DIR%%\" /E /I /H /Y >> "dist\安装Electron Paper.bat"
         echo echo 创建桌面快捷方式... >> "dist\安装Electron Paper.bat"
-        echo powershell -Command "& {$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut([System.Environment]::GetFolderPath('Desktop') + '\Electron Paper.lnk'); $Shortcut.TargetPath = '%%INSTALL_DIR%%\electron-paper.exe'; $Shortcut.Save()}" >> "dist\安装Electron Paper.bat"
+        echo powershell -Command "& {$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut([System.Environment]::GetFolderPath('Desktop') + '\Electron Paper.lnk'); $Shortcut.TargetPath = '%%INSTALL_DIR%%\Electron Paper.exe'; $Shortcut.Save()}" >> "dist\安装Electron Paper.bat"
         echo echo 创建开始菜单快捷方式... >> "dist\安装Electron Paper.bat"
         echo mkdir "%%APPDATA%%\Microsoft\Windows\Start Menu\Programs\Electron Paper" 2^>nul >> "dist\安装Electron Paper.bat"
-        echo powershell -Command "& {$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut([System.Environment]::GetFolderPath('Programs') + '\Electron Paper\Electron Paper.lnk'); $Shortcut.TargetPath = '%%INSTALL_DIR%%\electron-paper.exe'; $Shortcut.Save()}" >> "dist\安装Electron Paper.bat"
+        echo powershell -Command "& {$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut([System.Environment]::GetFolderPath('Programs') + '\Electron Paper\Electron Paper.lnk'); $Shortcut.TargetPath = '%%INSTALL_DIR%%\Electron Paper.exe'; $Shortcut.Save()}" >> "dist\安装Electron Paper.bat"
         echo echo 安装完成! >> "dist\安装Electron Paper.bat"
         echo pause >> "dist\安装Electron Paper.bat"
         
@@ -163,7 +150,7 @@ if %ERRORLEVEL% neq 0 (
         echo 由于网络原因无法创建标准安装程序，但已成功创建备用方案：
         echo.
         echo 1. 便携版应用:
-        echo    dist\Electron-Paper-portable\
+        echo    dist\win-unpacked\
         echo.
         echo 2. 简易安装脚本:
         echo    dist\安装Electron Paper.bat
@@ -185,7 +172,7 @@ echo.
 echo 你现在可以分发以下文件:
 echo.
 echo 1. 便携版应用:
-echo    dist\electron-paper-win32-x64\electron-paper.exe
+echo    dist\win-unpacked\Electron Paper.exe
 echo.
 echo 2. 支持自定义安装路径的安装程序:
 echo    dist\Electron Paper Setup*.exe

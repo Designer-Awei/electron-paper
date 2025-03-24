@@ -8,7 +8,7 @@
     "dev": "electron .",
     "dist:simple": "npx electron-packager . --platform=win32 --arch=x64 --out=dist --overwrite",
     "build": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_CUSTOM_DIR=28.3.3 electron-packager . --platform=win32 --arch=x64 --out=dist --icon=E-paper.ico --overwrite",
-    "build-nsis": "npm run build && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npx electron-builder --win --x64"
+    "build-nsis": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_CUSTOM_DIR=28.3.3 ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npx electron-builder --win --x64"
   },
   "keywords": [
     "Electron",
