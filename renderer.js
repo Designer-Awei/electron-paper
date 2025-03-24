@@ -3,12 +3,6 @@
  */
 console.log('渲染进程已加载');
 
-// 使用安全的 API 获取版本信息
-const versions = window.electronAPI.versions;
-console.log('Node.js 版本:', versions.node());
-console.log('Chrome 版本:', versions.chrome());
-console.log('Electron 版本:', versions.electron());
-
 // 获取 DOM 元素
 const searchInput = document.getElementById('searchInput');
 const timeRange = document.getElementById('timeRange');
@@ -315,7 +309,7 @@ async function searchPapers() {
         });
 
         // 调用 API 获取论文数据（一次性获取所有用户限制的数据）
-        const result = await window.electronAPI.arxiv.fetchPapers(queries, {
+        const result = await window.electronAPI.fetchArxivPapers(queries, {
             start: start,
             maxResults: maxResultsValue, // 直接使用用户限制的结果数
             dateStart: dateRange.start,
@@ -500,8 +494,11 @@ function renderPapers() {
         
         const link = document.createElement('a');
         link.href = paper.link;
-        link.target = '_blank';
         link.textContent = '查看';
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.electronAPI.openExternal(paper.link);
+        });
         
         linkCell.appendChild(link);
         
@@ -1236,59 +1233,75 @@ function hideApiKeyModal() {
 
 /**
  * @description 保存API密钥
+ * @returns {Promise<void>}
  */
 async function saveApiKey() {
-    const key = apiKeyInput.value.trim();
+    const key = document.getElementById('apiKeyInput').value.trim();
     if (!key) {
-        alert('请输入有效的API密钥');
+        alert('API密钥不能为空');
         return;
     }
-    
+
     try {
-        const success = await window.electronAPI.translation.saveApiKey(key);
+        // 更新为使用新的API
+        const success = await window.electronAPI.saveApiKey(key);
         if (success) {
             apiKey = key;
             hideApiKeyModal();
-            toggleTranslation(); // 保存成功后继续翻译
+            alert('API密钥保存成功');
         } else {
-            alert('保存API密钥失败');
+            alert('API密钥保存失败');
         }
     } catch (error) {
-        console.error('保存API密钥时出错:', error);
-        alert('保存API密钥时出错: ' + error.message);
+        console.error('保存API密钥失败:', error);
+        alert('保存API密钥失败: ' + error.message);
     }
 }
 
 /**
- * @description 获取API密钥
+ * @description 加载API密钥
+ * @returns {Promise<string|null>}
  */
 async function loadApiKey() {
     try {
-        const key = await window.electronAPI.translation.getApiKey();
-        apiKey = key;
-        return key;
+        // 更新为使用新的API
+        const key = await window.electronAPI.getApiKey();
+        if (key) {
+            apiKey = key;
+            console.log('API密钥已加载');
+        } else {
+            console.log('没有找到保存的API密钥');
+            apiKey = null;
+        }
+        return apiKey;
     } catch (error) {
-        console.error('获取API密钥时出错:', error);
-        return null;
+        console.error('加载API密钥失败:', error);
+        throw error;
     }
 }
 
 /**
  * @description 翻译文本
- * @param {string} text - 要翻译的文本
+ * @param {string} text - 待翻译的文本
  * @returns {Promise<string>} 翻译后的文本
  */
 async function translateText(text) {
-    try {
+    if (!text) return '';
+    if (!apiKey) {
+        await loadApiKey();
         if (!apiKey) {
-            await loadApiKey();
+            showApiKeyModal();
+            throw new Error('请先设置API密钥');
         }
-        
+    }
+    
+    try {
         // 获取当前选择的翻译模型
         const selectedModel = settingsModelSelection.value;
         console.log('当前使用的翻译模型:', selectedModel);
         
-        const translated = await window.electronAPI.translation.translate(text, apiKey, selectedModel);
+        // 更新为使用新的API
+        const translated = await window.electronAPI.translateText(text, apiKey, selectedModel);
         return translated;
     } catch (error) {
         console.error('翻译错误:', error);
@@ -1698,41 +1711,69 @@ function showStatusMessage(element, message, type) {
 
 /**
  * @description 保存设置
+ * @returns {Promise<boolean>}
  */
 async function saveSettings() {
     try {
-        const newApiKey = settingsApiKey.value.trim();
-        if (!newApiKey) {
-            showStatusMessage(settingsStatusMessage, '请输入有效的 API 密钥', 'error');
-            return;
-        }
+        // 获取表单值
+        const newApiKey = document.getElementById('settingsApiKey').value.trim();
+        const selectedModel = document.getElementById('settingsModelSelection').value;
+        const exportPath = document.getElementById('paperExportPath').value;
         
-        const success = await window.electronAPI.translation.saveApiKey(newApiKey);
+        // 构建设置对象
+        const settings = {
+            apiKey: newApiKey,
+            model: selectedModel,
+            exportPath: exportPath
+        };
+        
+        // 保存设置
+        const success = await window.electronAPI.saveSettings(settings);
+        
         if (success) {
-            showStatusMessage(settingsStatusMessage, '设置已保存', 'success');
-            // 更新全局API密钥 - 修复赋值错误
-            apiKey = newApiKey; // 这里使用新变量名避免与局部变量同名
+            // 更新全局变量
+            apiKey = newApiKey;
+            
+            // 显示成功消息
+            showStatusMessage(document.getElementById('settingsStatusMessage'), '设置已保存', 'success');
+            return true;
         } else {
-            showStatusMessage(settingsStatusMessage, '保存设置失败', 'error');
+            showStatusMessage(document.getElementById('settingsStatusMessage'), '保存设置失败', 'error');
+            return false;
         }
     } catch (error) {
         console.error('保存设置失败:', error);
-        showStatusMessage(settingsStatusMessage, '保存设置失败: ' + error.message, 'error');
+        showStatusMessage(document.getElementById('settingsStatusMessage'), '保存设置失败: ' + error.message, 'error');
+        return false;
     }
 }
 
 /**
  * @description 加载设置
+ * @returns {Promise<void>}
  */
 async function loadSettings() {
     try {
-        const key = await window.electronAPI.translation.getApiKey();
+        // 获取设置表单元素
+        const settingsApiKey = document.getElementById('settingsApiKey');
+        const settingsModelSelection = document.getElementById('settingsModelSelection');
+        const paperExportPath = document.getElementById('paperExportPath');
+        
+        // 加载API密钥
+        const key = await window.electronAPI.getApiKey();
         if (key) {
             settingsApiKey.value = key;
+            apiKey = key;
         }
+        
+        // 加载翻译模型设置 (这部分可以根据需要扩展)
+        // ... 
+
+        // 加载导出路径设置 (这部分可以根据需要扩展)
+        // ...
+
     } catch (error) {
         console.error('加载设置失败:', error);
-        showStatusMessage(settingsStatusMessage, '加载设置失败: ' + error.message, 'error');
     }
 }
 
@@ -1863,13 +1904,15 @@ function updateTable(results) {
         // 链接单元格 (第5列)
         const linkCell = document.createElement('td');
         linkCell.className = 'link-cell';
+        
         const link = document.createElement('a');
-        link.href = '#';
+        link.href = paper.link;
         link.textContent = '查看';
-        link.onclick = (e) => {
+        link.addEventListener('click', (e) => {
             e.preventDefault();
             window.electronAPI.openExternal(paper.link);
-        };
+        });
+        
         linkCell.appendChild(link);
         row.appendChild(linkCell);
 
@@ -2203,3 +2246,120 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 更新搜索输入框提示
 searchInput.placeholder = '输入关键词或arXiv ID (如2502.14776)';
+
+// 初始化页面
+document.addEventListener('DOMContentLoaded', function() {
+    // 获取语言设置
+    window.electronAPI.getLanguage()
+        .then(language => {
+            console.log('当前语言设置:', language);
+            // 可以根据语言设置修改界面
+        })
+        .catch(error => {
+            console.error('获取语言设置失败:', error);
+        });
+    
+    // 监听语言变更事件
+    window.electronAPI.onLanguageChanged(language => {
+        console.log('语言已变更为:', language);
+        // 可以根据语言设置修改界面
+    });
+    
+    // 处理设置页面的外部链接
+    const siliconFlowLink = document.getElementById('siliconFlowLink');
+    if (siliconFlowLink) {
+        siliconFlowLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.electronAPI.openExternal('https://cloud.siliconflow.cn/account/ak')
+                .then(success => {
+                    if (!success) {
+                        console.error('打开SiliconFlow链接失败');
+                    }
+                })
+                .catch(error => {
+                    console.error('打开外部链接时出错:', error);
+                });
+        });
+    }
+    
+    const jsonToExcelLink = document.getElementById('jsonToExcelLink');
+    if (jsonToExcelLink) {
+        jsonToExcelLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.electronAPI.openExternal('https://wejson.cn/json2excel/')
+                .then(success => {
+                    if (!success) {
+                        console.error('打开JSON转Excel链接失败');
+                    }
+                })
+                .catch(error => {
+                    console.error('打开外部链接时出错:', error);
+                });
+        });
+    }
+    
+    const searchButton = document.getElementById('searchButton');
+    const clearHistoryButton = document.getElementById('clearHistory');
+    const exportButton = document.getElementById('exportButton');
+    
+    // 按钮事件绑定
+    if (searchButton) {
+        searchButton.addEventListener('click', () => {
+            console.log('点击搜索按钮，开始搜索');
+            currentPage = 1; // 重置页码
+            searchPapers();
+        });
+    }
+    
+    if (clearHistoryButton) {
+        clearHistoryButton.addEventListener('click', () => {
+            if (confirm('确定要清空所有历史记录吗？')) {
+                localStorage.removeItem('searchHistory');
+                historyList.innerHTML = '<p>暂无历史记录</p>';
+                console.log('历史记录已清空');
+            }
+        });
+    }
+    
+    if (exportButton) {
+        // 先移除可能的旧事件监听器，防止重复绑定
+        const exportHandler = async function() {
+            console.log('导出按钮被点击');
+            // 检查是否有论文数据
+            if (!allPapers || allPapers.length === 0) {
+                alert('没有可导出的论文数据，请先搜索论文');
+                return;
+            }
+            
+            // 检查是否有选中的论文
+            if (selectedPaperIds.size === 0) {
+                // 提示用户是否导出所有论文
+                if (!confirm(`您当前没有选择任何论文，是否导出全部 ${allPapers.length} 篇论文？`)) {
+                    return;
+                }
+            }
+            
+            // 直接调用导出函数
+            exportPapers();
+        };
+        
+        // 先移除所有现有的click事件处理程序
+        exportButton.replaceWith(exportButton.cloneNode(true));
+        // 重新获取元素引用
+        const newExportBtn = document.getElementById('exportButton');
+        // 添加唯一的事件处理程序
+        if (newExportBtn) {
+            newExportBtn.addEventListener('click', exportHandler);
+            console.log('导出按钮事件已绑定');
+        } else {
+            console.error('未找到导出按钮元素');
+        }
+    }
+    
+    // 加载历史搜索记录
+    renderSearchHistory();
+    // 加载收藏夹
+    renderFavorites();
+    // 更新标签页状态
+    updateTabState();
+});

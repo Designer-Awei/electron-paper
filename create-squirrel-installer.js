@@ -15,6 +15,12 @@ const config = {
   description: 'Electron Paper Application',
   iconUrl: path.resolve(__dirname, './E-paper.ico'),
   setupIcon: path.resolve(__dirname, './E-paper.ico'),
+  noMsi: true,
+  // 启用自定义安装位置
+  allowElevation: true,
+  // 修改安装包名称
+  setupExe: 'Electron Paper-Setup.exe',
+  // 允许用户选择安装位置
   noMsi: true
 };
 
@@ -27,6 +33,7 @@ async function createInstaller() {
     await electronInstaller.createWindowsInstaller(config);
     console.log('安装程序创建成功！');
     console.log('安装程序位于:', path.resolve(__dirname, './dist/installer'));
+    console.log('安装包名称:', config.setupExe);
   } catch (error) {
     console.error('创建安装程序失败:', error.message);
   }

@@ -1,7 +1,7 @@
 /**
  * @description Electron 主进程文件
  */
-const { app, BrowserWindow, globalShortcut, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, dialog, shell, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const remote = require('@electron/remote/main');
@@ -33,22 +33,59 @@ if (isDev) {
 
 // 存储窗口的引用
 let mainWindow;
+// 默认语言设置为中文
+let currentLanguage = 'zh';
+
+/**
+ * @description 获取用户配置
+ * @returns {Object} 用户配置
+ */
+function getUserConfig() {
+  try {
+    const configPath = path.join(app.getPath('userData'), 'config.json');
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+  } catch (error) {
+    console.error('获取用户配置失败:', error);
+  }
+  return {};
+}
+
+/**
+ * @description 保存用户配置
+ * @param {Object} configData - 配置数据
+ * @returns {boolean} 是否保存成功
+ */
+function saveUserConfig(configData) {
+  try {
+    const configPath = path.join(app.getPath('userData'), 'config.json');
+    let existingConfig = {};
+    
+    // 如果配置文件已存在，读取它
+    if (fs.existsSync(configPath)) {
+      existingConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+    
+    // 合并配置
+    const newConfig = { ...existingConfig, ...configData };
+    
+    // 保存回文件
+    fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error('保存用户配置失败:', error);
+    return false;
+  }
+}
 
 /**
  * @description 获取API密钥
  * @returns {string|null} API密钥或null
  */
 function getApiKey() {
-  try {
-    const configPath = path.join(app.getPath('userData'), 'config.json');
-    if (fs.existsSync(configPath)) {
-      const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      return configData.apiKey || null;
-    }
-  } catch (error) {
-    console.error('获取API密钥失败:', error);
-  }
-  return null;
+  const config = getUserConfig();
+  return config.apiKey || null;
 }
 
 /**
@@ -57,25 +94,187 @@ function getApiKey() {
  * @returns {boolean} 是否保存成功
  */
 function saveApiKey(apiKey) {
-  try {
-    const configPath = path.join(app.getPath('userData'), 'config.json');
-    let configData = {};
-    
-    // 如果配置文件已存在，读取它
-    if (fs.existsSync(configPath)) {
-      configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    }
-    
-    // 更新API密钥
-    configData.apiKey = apiKey;
-    
-    // 保存回文件
-    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
-    return true;
-  } catch (error) {
-    console.error('保存API密钥失败:', error);
-    return false;
-  }
+  return saveUserConfig({ apiKey });
+}
+
+/**
+ * @description 获取语言设置
+ * @returns {string} 语言代码
+ */
+function getLanguage() {
+  const config = getUserConfig();
+  return config.language || 'zh'; // 默认中文
+}
+
+/**
+ * @description 保存语言设置
+ * @param {string} language - 语言代码
+ * @returns {boolean} 是否保存成功
+ */
+function saveLanguage(language) {
+  return saveUserConfig({ language });
+}
+
+/**
+ * @description 设置应用菜单
+ * @param {string} language - 语言代码 ('zh' 或 'en')
+ */
+function setApplicationMenu(language) {
+  currentLanguage = language;
+  
+  const menuTemplates = {
+    zh: [
+      {
+        label: '文件',
+        submenu: [
+          { role: 'quit', label: '退出' }
+        ]
+      },
+      {
+        label: '编辑',
+        submenu: [
+          { role: 'undo', label: '撤销' },
+          { role: 'redo', label: '恢复' },
+          { type: 'separator' },
+          { role: 'cut', label: '剪切' },
+          { role: 'copy', label: '复制' },
+          { role: 'paste', label: '粘贴' },
+          { role: 'delete', label: '删除' },
+          { role: 'selectAll', label: '全选' }
+        ]
+      },
+      {
+        label: '视图',
+        submenu: [
+          { role: 'reload', label: '重新加载' },
+          { role: 'forceReload', label: '强制重新加载' },
+          { role: 'toggleDevTools', label: '切换开发者工具' },
+          { type: 'separator' },
+          { role: 'resetZoom', label: '实际大小' },
+          { role: 'zoomIn', label: '放大' },
+          { role: 'zoomOut', label: '缩小' },
+          { type: 'separator' },
+          { role: 'togglefullscreen', label: '切换全屏' }
+        ]
+      },
+      {
+        label: '窗口',
+        submenu: [
+          { role: 'minimize', label: '最小化' },
+          { role: 'zoom', label: '缩放' },
+          { role: 'close', label: '关闭' }
+        ]
+      },
+      {
+        label: '帮助',
+        submenu: [
+          {
+            label: '语言/Language',
+            submenu: [
+              {
+                label: '中文',
+                type: 'radio',
+                checked: language === 'zh',
+                click: () => {
+                  saveLanguage('zh');
+                  setApplicationMenu('zh');
+                  mainWindow.webContents.send('language-changed', 'zh');
+                }
+              },
+              {
+                label: 'English',
+                type: 'radio',
+                checked: language === 'en',
+                click: () => {
+                  saveLanguage('en');
+                  setApplicationMenu('en');
+                  mainWindow.webContents.send('language-changed', 'en');
+                }
+              }
+            ]
+          },
+          { role: 'about', label: '关于' }
+        ]
+      }
+    ],
+    en: [
+      {
+        label: 'File',
+        submenu: [
+          { role: 'quit' }
+        ]
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'delete' },
+          { role: 'selectAll' }
+        ]
+      },
+      {
+        label: 'View',
+        submenu: [
+          { role: 'reload' },
+          { role: 'forceReload' },
+          { role: 'toggleDevTools' },
+          { type: 'separator' },
+          { role: 'resetZoom' },
+          { role: 'zoomIn' },
+          { role: 'zoomOut' },
+          { type: 'separator' },
+          { role: 'togglefullscreen' }
+        ]
+      },
+      {
+        label: 'Window',
+        submenu: [
+          { role: 'minimize' },
+          { role: 'zoom' },
+          { role: 'close' }
+        ]
+      },
+      {
+        label: 'Help',
+        submenu: [
+          {
+            label: 'Language/语言',
+            submenu: [
+              {
+                label: '中文',
+                type: 'radio',
+                checked: language === 'zh',
+                click: () => {
+                  saveLanguage('zh');
+                  setApplicationMenu('zh');
+                  mainWindow.webContents.send('language-changed', 'zh');
+                }
+              },
+              {
+                label: 'English',
+                type: 'radio',
+                checked: language === 'en',
+                click: () => {
+                  saveLanguage('en');
+                  setApplicationMenu('en');
+                  mainWindow.webContents.send('language-changed', 'en');
+                }
+              }
+            ]
+          },
+          { role: 'about' }
+        ]
+      }
+    ]
+  };
+  
+  const menu = Menu.buildFromTemplate(menuTemplates[language]);
+  Menu.setApplicationMenu(menu);
 }
 
 /**
@@ -111,11 +310,20 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // 获取保存的语言设置或默认使用中文
+  currentLanguage = getLanguage();
+  
+  // 设置应用菜单
+  setApplicationMenu(currentLanguage);
+  
   createWindow();
 
   // 设置IPC监听器
   ipcMain.handle('get-api-key', () => getApiKey());
   ipcMain.handle('save-api-key', (event, apiKey) => saveApiKey(apiKey));
+  
+  // 添加获取当前语言的IPC处理程序
+  ipcMain.handle('get-language', () => currentLanguage);
   
   // 添加选择目录的IPC处理程序
   ipcMain.handle('select-directory', async () => {

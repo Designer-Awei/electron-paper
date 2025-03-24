@@ -381,37 +381,30 @@ async function saveFile(filePath, content) {
     }
 }
 
-// 暴露安全的API给渲染进程
+// 将 Electron API 暴露给渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
-    versions: {
-        node: () => process.versions.node,
-        chrome: () => process.versions.chrome,
-        electron: () => process.versions.electron
-    },
-    arxiv: {
-        fetchPapers: fetchArxivPapers
-    },
-    translation: {
-        getApiKey: getApiKey,
-        saveApiKey: saveApiKey,
-        translate: (text, apiKey, model) => translateText(text, apiKey, model)
-    },
-    ipcRenderer: {
-        invoke: (channel, ...args) => {
-            const validChannels = ['get-api-key', 'save-api-key'];
-            if (validChannels.includes(channel)) {
-                return ipcRenderer.invoke(channel, ...args);
-            }
-            throw new Error(`不允许调用 ${channel}`);
-        }
-    },
-    // 文件和目录操作
-    selectDirectory: () => selectDirectory(),
+    // arXiv API 相关
+    fetchArxivPapers: (searchQueries, options) => fetchArxivPapers(searchQueries, options),
+    
+    // 设置相关
+    getApiKey: () => ipcRenderer.invoke('get-api-key'),
+    saveApiKey: (apiKey) => ipcRenderer.invoke('save-api-key', apiKey),
+    saveSettings: (settings) => saveSettings(settings),
+    
+    // 模型调用相关
+    translateText: (text, apiKey, model) => translateText(text, apiKey, model),
+    
+    // 文件操作相关
+    selectDirectory: () => ipcRenderer.invoke('select-directory'),
     saveFile: (filePath, content) => saveFile(filePath, content),
     
-    // 添加对话框API
-    showInputDialog: (options) => ipcRenderer.invoke('dialog:showInputBox', options),
+    // 对话框相关
+    showInputBox: (options) => ipcRenderer.invoke('dialog:showInputBox', options),
     
-    // 添加外部链接打开API
-    openExternal: (url) => ipcRenderer.invoke('open-external', url)
+    // 外部链接相关
+    openExternal: (url) => ipcRenderer.invoke('open-external', url),
+    
+    // 语言相关
+    getLanguage: () => ipcRenderer.invoke('get-language'),
+    onLanguageChanged: (callback) => ipcRenderer.on('language-changed', (_, language) => callback(language))
 }); 
