@@ -2195,31 +2195,57 @@ async function addToKnowledgeBase(papers) {
         // 添加新论文，避免重复
         papers.forEach(paper => {
             if (!linkSet.has(paper.link)) {
-                // 查找原始文本（如果存在翻译）
+                // 存储原始文本（英文）
                 let originalTitle = paper.title;
                 let originalSummary = paper.summary;
                 
-                // 如果当前是翻译状态，并且有对应的原始论文
-                if (isTranslated && originalPapers.length > 0) {
-                    // 找到对应的原始论文
+                // 存储翻译文本（中文）
+                let translatedTitle = null;
+                let translatedSummary = null;
+                
+                // 判断当前翻译状态和可能的翻译内容
+                if (isTranslated) {
+                    // 当前处于翻译状态，直接使用当前paper的title和summary作为翻译版本
+                    translatedTitle = paper.title;
+                    translatedSummary = paper.summary;
+                    
+                    // 从originalPapers中获取原文
                     const originalPaper = originalPapers.find(op => op.link === paper.link);
                     if (originalPaper) {
                         originalTitle = originalPaper.title;
                         originalSummary = originalPaper.summary;
                     }
+                } else {
+                    // 当前处于原文状态，但需要检查是否有翻译版本
+                    // 检查translatedPapers中是否存在该论文的翻译版本
+                    const translatedPaper = translatedPapers.find(tp => tp.link === paper.link);
+                    if (translatedPaper) {
+                        translatedTitle = translatedPaper.title;
+                        translatedSummary = translatedPaper.summary;
+                    }
                 }
+                
+                // 确定在知识库中显示的内容（优先选择翻译版本）
+                const displayTitle = translatedTitle || originalTitle;
+                const displaySummary = translatedSummary || originalSummary;
                 
                 // 添加额外的知识库字段
                 const knowledgePaper = {
                     ...paper,
+                    // 使用优先的翻译版本作为显示内容
+                    title: displayTitle,
+                    summary: displaySummary,
+                    // 额外的字段
                     addedDate: new Date().toISOString(),
                     isRead: false,
                     notes: '',
-                    // 保存原始标题和摘要
+                    // 保存原始和翻译的内容，以便后续切换
                     originalTitle: originalTitle,
                     originalSummary: originalSummary,
+                    translatedTitle: translatedTitle,
+                    translatedSummary: translatedSummary,
                     // 标记是否有翻译版本
-                    hasTranslation: isTranslated
+                    hasTranslation: Boolean(translatedTitle)
                 };
                 
                 knowledgeBaseItems.push(knowledgePaper);
@@ -2398,8 +2424,20 @@ function updateDetailContent(item) {
     if (!item) return;
     
     // 根据当前显示状态决定使用哪个标题和摘要
-    const title = isShowingOriginal && item.originalTitle ? item.originalTitle : item.title;
-    const summary = isShowingOriginal && item.originalSummary ? item.originalSummary : item.summary;
+    // 优先考虑显示翻译内容，除非用户明确要求显示原文
+    // isShowingOriginal为true时显示原文，为false时优先显示翻译版本
+    let title, summary;
+    
+    if (isShowingOriginal) {
+        // 用户要求显示原文
+        title = item.originalTitle || item.title;
+        summary = item.originalSummary || item.summary;
+    } else {
+        // 用户要求显示翻译版本（或默认状态）
+        // 优先使用翻译版本，如果没有则使用当前标题和摘要
+        title = item.translatedTitle || item.title;
+        summary = item.translatedSummary || item.summary;
+    }
     
     // 更新UI
     detailTitle.textContent = title;
@@ -2425,7 +2463,8 @@ function updateDetailContent(item) {
     notesTextarea.value = item.notes || '';
     
     // 更新语言切换按钮显示状态
-    if (item.hasTranslation && item.originalTitle && item.originalSummary) {
+    // 判断是否存在原文和翻译版本以决定是否显示语言切换按钮
+    if ((item.translatedTitle || item.translatedSummary) && (item.originalTitle || item.originalSummary)) {
         toggleLanguageButton.textContent = isShowingOriginal ? '显示中文' : '显示原文';
         languageToggleContainer.style.display = 'flex';
     } else {
