@@ -2075,25 +2075,9 @@ async function exportPapers() {
     try {
         console.log('开始导出论文...');
         
-        // 创建默认文件名（包含日期和时间，精确到分钟）
-        const now = new Date();
-        const date = now.toISOString().slice(0, 10);
-        const time = now.toTimeString().slice(0, 5).replace(':', '-');
-        const defaultFileName = `arxiv-papers-${date}_${time}`;
-        
-        console.log('尝试使用文件对话框获取文件名...');
-        
-        // 使用保存文件对话框让用户选择文件名和位置
-        const result = await window.electronAPI.showInputDialog({
-            title: '保存论文数据',
-            defaultValue: defaultFileName
-        });
-        
-        console.log('对话框返回结果:', result);
-        
-        // 如果用户取消，则中止导出
-        if (result.canceled) {
-            console.log('用户取消了导出操作');
+        // 检查是否有论文数据
+        if (allPapers.length === 0) {
+            alert('没有可导出的论文数据');
             return;
         }
         
@@ -2101,19 +2085,55 @@ async function exportPapers() {
         const isExportTranslated = isTranslated;
         const data = formatPapersForExport(isExportTranslated);
         
-        console.log(`准备导出 ${data.count} 篇论文，路径: ${result.fullPath}`);
+        // 创建默认文件名（包含日期和时间，精确到分钟）
+        const now = new Date();
+        const date = now.toISOString().slice(0, 10);
+        const time = now.toTimeString().slice(0, 5).replace(':', '-');
+        const defaultFileName = `arxiv-papers-${date}_${time}.json`;
         
-        // 使用对话框选择的完整路径保存文件
-        const filePath = result.fullPath;
+        // 让用户输入自定义文件名
+        console.log('请求用户输入文件名...');
+        const fileNameInput = await window.electronAPI.showInputBox({
+            title: '导出论文',
+            prompt: '请输入文件名 (默认将使用日期时间)',
+            defaultValue: defaultFileName,
+            placeholder: '输入文件名 (无需扩展名)'
+        });
+        
+        // 如果用户取消了操作，则中止导出
+        if (!fileNameInput || fileNameInput.canceled) {
+            console.log('用户取消了文件名输入');
+            return;
+        }
+        
+        // 确保文件名有.json扩展名
+        let fileName = fileNameInput.value || defaultFileName;
+        if (!fileName.toLowerCase().endsWith('.json')) {
+            fileName += '.json';
+        }
+        
+        // 选择保存目录
+        console.log('请选择保存目录...');
+        const saveDir = await window.electronAPI.selectDirectory();
+        
+        if (!saveDir) {
+            console.log('用户取消了选择目录');
+            return;
+        }
+        
+        // 构建完整的文件路径
+        const filePath = `${saveDir}/${fileName}`;
+        console.log(`准备导出 ${data.count} 篇论文到: ${filePath}`);
+        
+        // 保存文件
         const saveResult = await window.electronAPI.saveFile(filePath, JSON.stringify(data, null, 2));
         
-        console.log('保存结果:', saveResult);
-        
-        if (saveResult.success) {
-            alert(`导出成功！已保存 ${data.count} 篇论文到:\n${saveResult.path}`);
+        if (saveResult && saveResult.success) {
+            alert(`导出成功！已保存 ${data.count} 篇论文到:\n${saveResult.path || filePath}`);
         } else {
-            alert(`导出失败: ${saveResult.error}`);
+            alert(`导出失败：${saveResult && saveResult.error ? saveResult.error : '未知错误'}`);
         }
+        
     } catch (error) {
         console.error('导出论文时出错:', error);
         alert(`导出失败: ${error.message}`);
@@ -2363,3 +2383,50 @@ document.addEventListener('DOMContentLoaded', function() {
     // 更新标签页状态
     updateTabState();
 });
+
+/**
+ * @description 更新标签页状态
+ * @returns {void}
+ */
+function updateTabState() {
+    // 获取所有标签页和内容区域
+    const tabs = {
+        mainSearch: {
+            tab: mainSearchTab,
+            container: mainSearchContainer
+        },
+        history: {
+            tab: historySearchTab,
+            container: historyContainer
+        },
+        favorites: {
+            tab: favoritesTab,
+            container: favoritesContainer
+        },
+        settings: {
+            tab: settingsTab,
+            container: settingsContainer
+        }
+    };
+
+    // 查找当前激活的标签
+    const activeTab = Object.values(tabs).find(({tab}) => 
+        tab && tab.classList.contains('active')
+    );
+
+    // 如果没有激活的标签，默认激活主搜索标签
+    if (!activeTab) {
+        tabs.mainSearch.tab.classList.add('active');
+        tabs.mainSearch.container.style.display = 'block';
+        return;
+    }
+
+    // 更新所有标签页的显示状态
+    Object.values(tabs).forEach(({tab, container}) => {
+        if (tab === activeTab.tab) {
+            container.style.display = 'block';
+        } else {
+            container.style.display = 'none';
+        }
+    });
+}
