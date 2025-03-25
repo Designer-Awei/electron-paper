@@ -342,11 +342,36 @@ app.whenReady().then(() => {
   // 添加打开外部链接的IPC处理程序
   ipcMain.handle('open-external', async (event, url) => {
     try {
+      console.log(`正在尝试打开外部链接: ${url}`);
+      if (!url) {
+        console.error('打开外部链接失败: URL为空');
+        return false;
+      }
+      
+      // 检查URL是否有效，允许http和https链接
+      const isHttpUrl = url.startsWith('http://') || url.startsWith('https://');
+      if (!isHttpUrl) {
+        console.error(`打开外部链接失败: 不是有效的HTTP URL: ${url}`);
+        return false;
+      }
+      
+      // 尝试使用shell.openExternal打开URL
       await shell.openExternal(url);
+      console.log(`成功打开外部链接: ${url}`);
       return true;
     } catch (error) {
-      console.error('打开外部链接失败:', error);
-      return false;
+      console.error(`打开外部链接失败: ${error.message}`);
+      
+      // 尝试使用备用方法
+      try {
+        console.log('尝试使用require("electron").shell打开链接...');
+        require('electron').shell.openExternal(url);
+        console.log('备用方法成功打开链接');
+        return true;
+      } catch (backupError) {
+        console.error(`备用方法也失败: ${backupError.message}`);
+        return false;
+      }
     }
   });
 

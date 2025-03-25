@@ -32,9 +32,22 @@ async function fetchArxivPapers(searchQueries, options = {}) {
 
     while (retryCount < maxRetries) {
         try {
+            console.log('开始获取arXiv论文，第', retryCount + 1, '次尝试');
+            
+            // 检查searchQueries是否有效
+            if (!searchQueries || !Array.isArray(searchQueries) || searchQueries.length === 0) {
+                throw new Error('搜索查询为空或格式不正确');
+            }
+            
             // 构建高级搜索查询
             const searchQuery = searchQueries.map((q, index) => {
                 const { field, term, operator } = q;
+                
+                // 检查必要字段是否存在
+                if (!field || !term) {
+                    console.warn('缺少搜索字段或搜索词:', q);
+                    return '';
+                }
                 
                 // 检查是否是arXiv ID格式 (YYMM.nnnnn)
                 const isArxivId = /^\d{4}\.\d{4,5}$/.test(term.trim());
@@ -74,7 +87,12 @@ async function fetchArxivPapers(searchQueries, options = {}) {
                 } else {
                     return `${operator}+${queryPart}`;
                 }
-            }).join('+');
+            }).filter(part => part !== '').join('+');
+            
+            // 检查最终查询字符串是否为空
+            if (!searchQuery) {
+                throw new Error('生成的搜索查询为空');
+            }
 
             // 不要一次请求太多数据，避免API限制
             // arXiv API 通常限制一次请求不超过100条
@@ -92,20 +110,56 @@ async function fetchArxivPapers(searchQueries, options = {}) {
                 排序顺序: sortOrder
             });
             
-            const response = await axios.get(url, {
-                timeout: 30000, // 设置30秒超时
-                headers: {
-                    'User-Agent': 'ElectronPaperApp/1.0.0' // 添加用户代理
+            // 尝试使用axios进行请求
+            let response;
+            try {
+                response = await axios.get(url, {
+                    timeout: 30000, // 设置30秒超时
+                    headers: {
+                        'User-Agent': 'ElectronPaperApp/1.0.0' // 添加用户代理
+                    }
+                });
+            } catch (axiosError) {
+                console.error('Axios请求失败:', axiosError.message);
+                // 特殊处理网络错误
+                if (axiosError.code === 'ECONNREFUSED' || axiosError.code === 'ENOTFOUND') {
+                    throw new Error('无法连接到arXiv服务器，请检查网络连接');
+                } else if (axiosError.code === 'ETIMEDOUT') {
+                    throw new Error('连接arXiv服务器超时，请稍后重试');
+                } else {
+                    throw axiosError; // 重新抛出以便外层捕获
                 }
-            });
+            }
             
             console.log('API 响应状态:', response.status);
+            
+            // 检查响应状态
+            if (response.status !== 200) {
+                throw new Error(`API返回错误状态码: ${response.status}`);
+            }
+            
+            // 检查响应数据是否为XML
+            if (!response.data || typeof response.data !== 'string' || !response.data.includes('<?xml')) {
+                throw new Error('API返回数据格式错误，应为XML');
+            }
             
             // 打印原始响应数据以便调试
             console.log('API 原始响应的前500个字符:', response.data.substring(0, 500));
             
-            const parser = new xml2js.Parser();
-            const result = await parser.parseStringPromise(response.data);
+            // 尝试使用xml2js解析XML
+            let result;
+            try {
+                const parser = new xml2js.Parser();
+                result = await parser.parseStringPromise(response.data);
+            } catch (parseError) {
+                console.error('XML解析失败:', parseError);
+                throw new Error('解析API返回的XML数据失败');
+            }
+            
+            // 检查result是否包含必要的feed属性
+            if (!result || !result.feed) {
+                throw new Error('解析后的数据缺少feed属性');
+            }
             
             // 只打印结果的一部分，避免日志过大
             const resultSummary = {
@@ -398,7 +452,21 @@ async function saveFile(filePath, content) {
 // 将 Electron API 暴露给渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
     // arXiv API 相关
-    fetchArxivPapers: (searchQueries, options) => fetchArxivPapers(searchQueries, options),
+    fetchArxivPapers: async (searchQueries, options) => {
+        try {
+            console.log('预加载脚本：调用fetchArxivPapers', { searchQueries, options });
+            return await fetchArxivPapers(searchQueries, options);
+        } catch (error) {
+            console.error('预加载脚本：fetchArxivPapers执行失败:', error.message);
+            // 返回一个带错误信息的对象，而不是直接抛出错误
+            return {
+                papers: [],
+                totalResults: 0,
+                originalApiTotal: 0,
+                error: error.message
+            };
+        }
+    },
     
     // 设置相关
     getApiKey: () => ipcRenderer.invoke('get-api-key'),
@@ -416,7 +484,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     showInputBox: (options) => ipcRenderer.invoke('dialog:showInputBox', options),
     
     // 外部链接相关
-    openExternal: (url) => ipcRenderer.invoke('open-external', url),
+    openExternal: async (url) => {
+        try {
+            console.log('预加载脚本：调用openExternal', url);
+            return await ipcRenderer.invoke('open-external', url);
+        } catch (error) {
+            console.error('预加载脚本：openExternal执行失败:', error.message);
+            return false;
+        }
+    },
     
     // 语言相关
     getLanguage: () => ipcRenderer.invoke('get-language'),
