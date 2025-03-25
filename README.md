@@ -122,14 +122,14 @@ npm start
 
 ## 打包说明
 
-本项目提供完整的打包脚本，可以轻松创建便携版和安装版应用。
+本项目提供打包脚本，可以轻松创建便携版和安装版应用。
 
 ### 一键打包（推荐）
 
-使用一键打包脚本可同时生成便携版和安装版：
+使用打包脚本可同时生成便携版和安装版：
 
 ```bash
-# 以管理员身份运行一键打包脚本
+# 以管理员身份运行打包脚本
 .\package.bat
 ```
 
@@ -137,7 +137,7 @@ npm start
 1. 结束可能运行的应用程序进程
 2. 清理旧版本和已安装的应用
 3. 安装或更新必要的依赖
-4. 打包便携版应用并创建支持自定义安装路径的安装程序
+4. 直接使用electron-builder创建便携版应用和自定义安装程序
 
 ### 手动打包
 
@@ -150,14 +150,15 @@ npm run build-nsis
 
 此命令会：
 1. 清理旧版本和已安装的应用
-2. 打包便携版应用
-3. 创建支持自定义安装路径的Windows安装程序
+2. 使用electron-builder直接创建便携版应用和Windows安装程序
 
 输出：
-- 便携版：`dist/win-unpacked/`
-- 安装程序：`dist/Electron Paper-Setup.exe`
+- 便携版：`dist/win-unpacked/` (包含 `Electron Paper.exe`)
+- 安装程序：`dist/Electron Paper Setup 1.0.0.exe`
 
 ### 单独打包便携版
+
+如果只需要便携版，可以使用：
 
 ```bash
 # 仅打包便携版
@@ -176,7 +177,7 @@ electron-paper/
 ├── package.json    # 项目配置和依赖
 ├── E-paper.ico     # 应用图标
 ├── installer.nsh   # NSIS安装程序自定义配置
-├── package.bat     # 一键打包脚本
+├── package.bat     # 打包脚本
 ├── start-dev.bat   # 开发模式启动脚本
 └── README.md       # 项目说明
 ```
