@@ -3,6 +3,19 @@
  */
 console.log('renderer.js 脚本加载成功');
 
+// 在文件顶部添加formatDate函数定义
+/**
+ * @description 格式化日期字符串
+ * @param {String} dateString ISO格式的日期字符串
+ * @returns {String} 格式化后的日期字符串 (YYYY-MM-DD)
+ */
+function formatDate(dateString) {
+    if (!dateString) return '未知日期';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString; // 如果解析失败，返回原始字符串
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 // 获取 DOM 元素
 const searchInput = document.getElementById('searchInput');
 const timeRange = document.getElementById('timeRange');
@@ -115,6 +128,10 @@ const languageToggleContainer = document.getElementById('languageToggleContainer
 
 // 当前是否显示原文
 let isShowingOriginal = false;
+
+// 获取知识库导入/导出按钮
+const importKnowledgeBase = document.getElementById('importKnowledgeBase');
+const exportKnowledgeBase = document.getElementById('exportKnowledgeBase');
 
 /**
  * @description 获取日期范围
@@ -1503,14 +1520,20 @@ function renderFavorites() {
  * @description 显示API密钥输入弹窗
  */
 function showApiKeyModal() {
-    apiKeyModal.style.display = 'block';
+    apiKeyModal.style.display = 'flex';
+    setTimeout(() => {
+        apiKeyModal.classList.add('modal-open');
+    }, 10);
 }
 
 /**
  * @description 隐藏API密钥输入弹窗
  */
 function hideApiKeyModal() {
-    apiKeyModal.style.display = 'none';
+    apiKeyModal.classList.remove('modal-open');
+    setTimeout(() => {
+        apiKeyModal.style.display = 'none';
+    }, 300);
 }
 
 /**
@@ -2188,28 +2211,48 @@ saveSettingsButton.addEventListener('click', saveSettings);
 // 添加选择路径按钮事件监听
 selectPathButton.addEventListener('click', async () => {
     try {
+        // 使用selectDirectory方法选择文件夹
         const selectedPath = await window.electronAPI.selectDirectory();
-        if (selectedPath) {
-            document.getElementById('paperExportPath').value = selectedPath;
-            exportPath = selectedPath;
-            localStorage.setItem('exportPath', selectedPath);
+        
+        if (!selectedPath) {
+            console.log('用户取消了选择文件夹操作');
+            return;
         }
+        
+        // 保存选择的路径，添加末尾的斜杠/反斜杠
+        const formattedPath = selectedPath + '\\';
+        localStorage.setItem('paperExportPath', formattedPath);
+        document.getElementById('paperExportPath').value = formattedPath;
+        
+        alert(`已设置默认导出路径为: ${formattedPath}`);
     } catch (error) {
         console.error('选择导出路径失败:', error);
+        alert('选择导出路径失败: ' + error.message);
     }
 });
 
 // 添加选择知识库路径按钮事件监听
 selectKnowledgeBasePathButton.addEventListener('click', async () => {
     try {
+        // 使用selectDirectory方法选择文件夹
         const selectedPath = await window.electronAPI.selectDirectory();
-        if (selectedPath) {
-            document.getElementById('knowledgeBasePath').value = selectedPath;
-            knowledgeBaseSavePath = selectedPath;
-            localStorage.setItem('knowledgeBasePath', selectedPath);
+        
+        if (!selectedPath) {
+            console.log('用户取消了选择知识库文件夹操作');
+            return;
         }
+        
+        // 保存选择的路径，添加末尾的斜杠/反斜杠
+        const formattedPath = selectedPath + '\\';
+        document.getElementById('knowledgeBasePath').value = formattedPath;
+        knowledgeBaseSavePath = formattedPath;
+        localStorage.setItem('knowledgeBasePath', formattedPath);
+        
+        // 显示设置成功的提示
+        alert(`已设置知识库存放路径为: ${formattedPath}`);
     } catch (error) {
         console.error('选择知识库路径失败:', error);
+        alert('选择知识库路径失败: ' + error.message);
     }
 });
 
@@ -2226,6 +2269,8 @@ function loadKnowledgeBase() {
     try {
         // 尝试从localStorage获取知识库路径
         const savedPath = localStorage.getItem('knowledgeBasePath');
+        console.log('从localStorage获取的知识库路径:', savedPath);
+        
         if (savedPath) {
             knowledgeBaseSavePath = savedPath;
             knowledgeBasePath.value = savedPath;
@@ -2233,8 +2278,8 @@ function loadKnowledgeBase() {
             // 尝试从文件中读取知识库数据
             const filePath = `${savedPath}/knowledge-base.json`;
             try {
-                // 使用window.electronAPI.saveFile函数的逻辑来读取文件
-                // 注意：这里是同步读取，因为loadKnowledgeBase不是async函数
+                console.log('尝试从文件读取知识库:', filePath);
+                // 使用window.electronAPI.readFile函数的逻辑来读取文件
                 if (window.electronAPI && typeof window.electronAPI.readFile === 'function') {
                     // 如果预加载脚本中提供了readFile函数，则使用它
                     const fileData = window.electronAPI.readFile(filePath);
@@ -2244,20 +2289,30 @@ function loadKnowledgeBase() {
                         // 保存到localStorage以备不时之需
                         localStorage.setItem('knowledgeBase', JSON.stringify(parsedData.papers || []));
                         return parsedData.papers || [];
+                    } else {
+                        console.warn('文件读取失败或文件为空:', fileData);
+                        // 确保在文件读取失败时也保留路径
+                        localStorage.setItem('knowledgeBasePath', savedPath);
                     }
+                } else {
+                    console.error('window.electronAPI.readFile函数不可用');
                 }
-                // 如果readFile函数不可用或读取失败，会继续执行后面的代码
             } catch (fileError) {
                 console.error('从文件读取知识库数据失败:', fileError);
-                // 文件读取失败，继续尝试从localStorage读取
+                // 确保在文件读取失败时也保留路径
+                localStorage.setItem('knowledgeBasePath', savedPath);
             }
+        } else {
+            console.log('未在localStorage中找到知识库路径');
         }
         
         // 如果从文件读取失败或没有保存路径，尝试从localStorage获取知识库数据
         const savedData = localStorage.getItem('knowledgeBase');
         if (savedData) {
+            console.log('从localStorage加载知识库数据');
             return JSON.parse(savedData);
         }
+        console.log('未找到知识库数据');
         return [];
     } catch (error) {
         console.error('加载知识库数据失败:', error);
@@ -2286,19 +2341,30 @@ function saveKnowledgeBase(data) {
  */
 async function saveKnowledgeBaseToFile() {
     try {
+        console.log('开始保存知识库到文件');
+        
         // 如果路径为空，请求用户选择
         if (!knowledgeBaseSavePath) {
+            console.log('知识库路径为空，请求用户选择路径');
             const selectedPath = await window.electronAPI.selectDirectory();
             if (!selectedPath) {
+                console.log('用户取消了选择路径');
                 return false; // 用户取消了选择
             }
-            knowledgeBaseSavePath = selectedPath;
-            knowledgeBasePath.value = selectedPath;
-            localStorage.setItem('knowledgeBasePath', selectedPath);
+            // 添加末尾的斜杠/反斜杠
+            const formattedPath = selectedPath + '\\';
+            knowledgeBaseSavePath = formattedPath;
+            knowledgeBasePath.value = formattedPath;
+            localStorage.setItem('knowledgeBasePath', formattedPath);
+            console.log('已设置新的知识库路径:', formattedPath);
+            
+            // 显示设置成功的提示
+            alert(`已设置知识库存放路径为: ${formattedPath}`);
         }
         
         // 创建文件路径
         const filePath = `${knowledgeBaseSavePath}/knowledge-base.json`;
+        console.log('将保存知识库到文件:', filePath);
         
         // 准备数据
         const data = {
@@ -2307,12 +2373,29 @@ async function saveKnowledgeBaseToFile() {
             papers: knowledgeBaseItems
         };
         
+        console.log(`准备保存 ${knowledgeBaseItems.length} 篇论文到知识库文件`);
+        
         // 保存到文件
         const saveResult = await window.electronAPI.saveFile(filePath, JSON.stringify(data, null, 2));
         
-        return saveResult && saveResult.success;
+        if (saveResult && saveResult.success) {
+            console.log('知识库保存成功，文件路径:', saveResult.path);
+            
+            // 确保路径被保存到localStorage
+            if (knowledgeBaseSavePath) {
+                localStorage.setItem('knowledgeBasePath', knowledgeBaseSavePath);
+                console.log('知识库路径已保存到localStorage:', knowledgeBaseSavePath);
+            }
+            
+            return true;
+        } else {
+            console.error('保存知识库文件失败:', saveResult?.error || '未知错误');
+            alert('保存知识库文件失败: ' + (saveResult?.error || '未知错误'));
+            return false;
+        }
     } catch (error) {
         console.error('保存知识库到文件失败:', error);
+        alert('保存知识库到文件失败: ' + error.message);
         return false;
     }
 }
@@ -2320,7 +2403,7 @@ async function saveKnowledgeBaseToFile() {
 /**
  * @description 将论文添加到知识库
  * @param {Array} papers 要添加的论文数组
- * @returns {Number} 成功添加的论文数量
+ * @returns {Object} 包含添加结果的对象
  */
 async function addToKnowledgeBase(papers) {
     try {
@@ -2338,8 +2421,10 @@ async function addToKnowledgeBase(papers) {
         console.log('已加载现有知识库，条目数量:', existingItems.length);
         knowledgeBaseItems = existingItems;
         
-        // 记录成功添加的数量
+        // 记录成功添加的数量和重复的数量
         let addedCount = 0;
+        let duplicateCount = 0;
+        let duplicateTitles = [];
         
         // 创建链接集合用于去重
         const linkSet = new Set(existingItems.map(item => item.link));
@@ -2408,10 +2493,17 @@ async function addToKnowledgeBase(papers) {
                 addedCount++;
             } else {
                 console.log('跳过重复论文:', paper.title);
+                duplicateCount++;
+                // 记录重复论文的标题，最多记录5个
+                if (duplicateTitles.length < 5) {
+                    // 获取论文标题，如果标题太长则截断
+                    const title = paper.title.length > 50 ? paper.title.substring(0, 50) + '...' : paper.title;
+                    duplicateTitles.push(title);
+                }
             }
         });
         
-        console.log(`处理完成，添加了 ${addedCount} 篇新论文`);
+        console.log(`处理完成，添加了 ${addedCount} 篇新论文，跳过 ${duplicateCount} 篇重复论文`);
         
         // 保存到本地存储
         const saveResult = saveKnowledgeBase(knowledgeBaseItems);
@@ -2431,19 +2523,29 @@ async function addToKnowledgeBase(papers) {
             console.error('知识库渲染失败:', renderError);
         }
         
-        return addedCount;
+        // 返回添加结果
+        return {
+            success: true,
+            addedCount: addedCount,
+            duplicateCount: duplicateCount,
+            duplicateTitles: duplicateTitles
+        };
     } catch (error) {
         console.error('添加到知识库失败:', error);
-        return 0;
+        return {
+            success: false,
+            error: error.message,
+            addedCount: 0,
+            duplicateCount: 0
+        };
     }
 }
 
 /**
- * @description 从知识库中移除论文
- * @param {String} id 要移除的论文ID（链接）
- * @returns {Boolean} 是否移除成功
+ * @description 渲染知识库内容
+ * @returns {void}
  */
-async function removeFromKnowledgeBase(id) {
+function renderKnowledgeBase() {
     try {
         // 先从localStorage获取知识库路径
         const savedPath = localStorage.getItem('knowledgeBasePath');
@@ -2455,8 +2557,6 @@ async function removeFromKnowledgeBase(id) {
         // 确保当前知识库数据已加载
         knowledgeBaseItems = loadKnowledgeBase();
         
-        // 找到要删除的索引
-        const index = knowledgeBaseItems.findIndex(item => item.link === id);
         console.log(`已加载知识库数据，当前有 ${knowledgeBaseItems.length} 篇论文`);
         
         // 确保知识库网格元素存在
@@ -2582,6 +2682,107 @@ async function removeFromKnowledgeBase(id) {
     }
 }
 
+/**
+ * @description 从知识库中移除论文
+ * @param {String} id 要移除的论文ID（链接）
+ * @returns {Boolean} 是否移除成功
+ */
+async function removeFromKnowledgeBase(id) {
+    try {
+        // 确保当前知识库数据已加载
+        knowledgeBaseItems = loadKnowledgeBase();
+        
+        // 找到要删除的索引
+        const index = knowledgeBaseItems.findIndex(item => item.link === id);
+        
+        if (index === -1) {
+            console.error('找不到要删除的论文:', id);
+            return false;
+        }
+        
+        // 从数组中删除
+        knowledgeBaseItems.splice(index, 1);
+        
+        // 保存更新后的数据
+        saveKnowledgeBase(knowledgeBaseItems);
+        
+        // 保存到文件
+        await saveKnowledgeBaseToFile();
+        
+        // 重新渲染知识库
+        renderKnowledgeBase();
+        
+        return true;
+    } catch (error) {
+        console.error('从知识库中删除论文失败:', error);
+        return false;
+    }
+}
+
+/**
+ * @description 导出知识库数据为自定义命名的JSON文件
+ * @returns {Promise<boolean>} 是否导出成功
+ */
+async function exportKnowledgeBaseToCustomFile() {
+    try {
+        // 加载知识库数据
+        const knowledgeData = loadKnowledgeBase();
+        
+        if (!knowledgeData || knowledgeData.length === 0) {
+            alert('知识库为空，没有可导出的内容');
+            return false;
+        }
+        
+        // 弹出文件保存对话框
+        const options = {
+            title: '导出知识库',
+            buttonLabel: '导出',
+            defaultPath: `知识库导出_${new Date().toISOString().slice(0, 10)}.json`,
+            filters: [
+                { name: 'JSON文件', extensions: ['json'] }
+            ]
+        };
+        
+        const result = await window.electronAPI.showInputBox({
+            type: 'file-save',
+            options: options
+        });
+        
+        if (!result || !result.filePath) {
+            console.log('用户取消了导出操作');
+            return false;
+        }
+        
+        // 准备导出数据
+        const exportData = {
+            timestamp: new Date().toISOString(),
+            count: knowledgeData.length,
+            papers: knowledgeData
+        };
+        
+        // 保存到用户选择的文件
+        const saveResult = await window.electronAPI.saveFile(
+            result.filePath, 
+            JSON.stringify(exportData, null, 2)
+        );
+        
+        if (!saveResult || !saveResult.success) {
+            throw new Error('保存文件失败：' + (saveResult?.error || '未知错误'));
+        }
+        
+        alert(`导出成功！\n已导出 ${knowledgeData.length} 篇论文到：\n${result.filePath}`);
+        return true;
+    } catch (error) {
+        console.error('导出知识库失败:', error);
+        alert('导出知识库失败: ' + error.message);
+        return false;
+    }
+}
+
+// 添加导入/导出按钮的事件监听器 - 添加到页面底部的事件初始化部分
+importKnowledgeBase.addEventListener('click', importKnowledgeBaseFromFile);
+exportKnowledgeBase.addEventListener('click', exportKnowledgeBaseToCustomFile);
+
 // 监听回车键
 searchInput.addEventListener('keypress', (event) => {
     if (event.key === 'Enter') {
@@ -2592,11 +2793,11 @@ searchInput.addEventListener('keypress', (event) => {
 });
 
 // 监听搜索按钮点击
-        searchButton.addEventListener('click', () => {
-            console.log('点击搜索按钮，开始搜索');
-            currentPage = 1; // 重置页码
-            searchPapers();
-        });
+searchButton.addEventListener('click', () => {
+    console.log('点击搜索按钮，开始搜索');
+    currentPage = 1; // 重置页码
+    searchPapers();
+});
 
 // 添加详情页笔记编辑按钮事件监听
 editNotesButton.addEventListener('click', () => {
@@ -2625,7 +2826,7 @@ saveNotes.addEventListener('click', () => {
     const itemIndex = knowledgeBaseItems.findIndex(item => item.link === currentDetailItem.link);
     if (itemIndex !== -1) {
         knowledgeBaseItems[itemIndex].notes = notes;
-        saveKnowledgeBase();
+        saveKnowledgeBase(knowledgeBaseItems);
     }
     
     // 更新显示
@@ -2638,5 +2839,525 @@ saveNotes.addEventListener('click', () => {
 
 // 添加关闭详情弹窗按钮事件监听
 closeDetailModal.addEventListener('click', () => {
-    detailModal.style.display = 'none';
+    detailModal.classList.remove('detail-open');
+    setTimeout(() => {
+        detailModal.style.display = 'none';
+    }, 300);
+});
+
+/**
+ * @description 更新知识库条目的已读/未读状态
+ * @param {String} id 论文ID（链接）
+ * @param {Boolean} isRead 是否已读
+ * @returns {Boolean} 是否更新成功
+ */
+async function updateKnowledgeBaseItemReadStatus(id, isRead) {
+    try {
+        // 确保知识库数据已加载
+        knowledgeBaseItems = loadKnowledgeBase();
+        
+        // 找到要更新的项
+        const index = knowledgeBaseItems.findIndex(item => item.link === id);
+        
+        if (index === -1) {
+            console.error('找不到要更新的论文:', id);
+            return false;
+        }
+        
+        // 更新阅读状态
+        knowledgeBaseItems[index].isRead = isRead;
+        
+        // 保存更新后的数据
+        saveKnowledgeBase(knowledgeBaseItems);
+        
+        // 保存到文件
+        await saveKnowledgeBaseToFile();
+        
+        // 重新渲染知识库
+        renderKnowledgeBase();
+        
+        return true;
+    } catch (error) {
+        console.error('更新阅读状态失败:', error);
+        return false;
+    }
+}
+
+/**
+ * @description 显示知识库条目的详细信息
+ * @param {String} id 论文ID（链接）
+ * @returns {void}
+ */
+function showKnowledgeBaseItemDetail(id) {
+    try {
+        console.log("显示详情页，ID:", id);
+        const item = knowledgeBaseItems.find(item => item.link === id);
+        
+        if (!item) {
+            console.error('找不到对应ID的知识库项目:', id);
+            return;
+        }
+        
+        // 设置详情内容
+        detailTitle.textContent = item.title;
+        detailAuthors.textContent = item.authors;
+        detailDate.textContent = formatDate(item.published);
+        
+        // 设置分类
+        detailCategories.innerHTML = '';
+        if (item.categories) {
+            // 处理categories可能是字符串或数组的情况
+            let categoriesArray = [];
+            
+            if (Array.isArray(item.categories)) {
+                // 如果是数组，直接使用
+                categoriesArray = item.categories;
+            } else if (typeof item.categories === 'string') {
+                // 如果是字符串，按逗号分隔
+                categoriesArray = item.categories.split(', ');
+            }
+            
+            // 创建分类标签
+            categoriesArray.forEach(category => {
+                const categoryElem = document.createElement('div');
+                categoryElem.className = 'detail-category';
+                categoryElem.textContent = category;
+                detailCategories.appendChild(categoryElem);
+            });
+        }
+        
+        // 设置摘要
+        detailAbstract.textContent = item.summary;
+        
+        // 设置笔记
+        detailNotes.innerHTML = item.notes ? item.notes.replace(/\n/g, '<br>') : '<em>暂无笔记</em>';
+        notesTextarea.value = item.notes || '';
+        
+        // 根据是否有翻译版本更新语言切换按钮状态
+        if (item.hasTranslation) {
+            toggleLanguageButton.style.display = 'block';
+            toggleLanguageButton.textContent = '显示原文';
+            toggleLanguageButton.dataset.showingTranslation = 'true';
+            
+            // 保存当前显示状态的引用
+            currentDetailItem = item;
+        } else {
+            toggleLanguageButton.style.display = 'none';
+        }
+        
+        // 设置原文链接按钮
+        linkButton.onclick = () => {
+            window.electronAPI.openExternal(item.link);
+        };
+        
+        // 如果没有标记为已读，添加标记为已读按钮
+        const existingMarkReadButton = document.getElementById('markReadButton');
+        if (existingMarkReadButton) {
+            existingMarkReadButton.remove();
+        }
+        
+        const markReadButton = document.createElement('button');
+        markReadButton.id = 'markReadButton';
+        markReadButton.className = 'secondary-button';
+        markReadButton.textContent = item.isRead ? '标记为未读' : '标记为已读';
+        languageToggleContainer.appendChild(markReadButton);
+        
+        markReadButton.addEventListener('click', async () => {
+            const newReadStatus = !item.isRead;
+            await updateKnowledgeBaseItemReadStatus(id, newReadStatus);
+            markReadButton.textContent = newReadStatus ? '标记为未读' : '标记为已读';
+        });
+        
+        // 切换语言按钮事件
+        toggleLanguageButton.onclick = () => {
+            const showingTranslation = toggleLanguageButton.dataset.showingTranslation === 'true';
+            
+            if (showingTranslation) {
+                // 切换到原文
+                detailTitle.textContent = item.originalTitle;
+                detailAbstract.textContent = item.originalSummary;
+                toggleLanguageButton.textContent = '显示翻译';
+                toggleLanguageButton.dataset.showingTranslation = 'false';
+            } else {
+                // 切换到翻译
+                detailTitle.textContent = item.translatedTitle || item.title;
+                detailAbstract.textContent = item.translatedSummary || item.summary;
+                toggleLanguageButton.textContent = '显示原文';
+                toggleLanguageButton.dataset.showingTranslation = 'true';
+            }
+        };
+        
+        // 显示弹窗
+        detailModal.style.display = 'flex';
+        setTimeout(() => {
+            detailModal.classList.add('detail-open');
+        }, 10);
+        
+    } catch (error) {
+        console.error('显示详情页失败:', error);
+    }
+}
+
+/**
+ * @description 导入知识库数据
+ * @returns {Promise<boolean>} 是否导入成功
+ */
+async function importKnowledgeBaseFromFile() {
+    try {
+        // 弹出文件选择对话框，选择JSON文件
+        const options = {
+            title: '选择知识库JSON文件',
+            buttonLabel: '导入',
+            properties: ['openFile'],
+            filters: [
+                { name: 'JSON文件', extensions: ['json'] }
+            ]
+        };
+        
+        const result = await window.electronAPI.showInputBox({
+            type: 'file-open',
+            options: options
+        });
+        
+        if (!result || !result.filePath) {
+            console.log('用户取消了导入操作');
+            return false;
+        }
+        
+        // 读取选择的JSON文件
+        const fileData = window.electronAPI.readFile(result.filePath);
+        if (!fileData || !fileData.success || !fileData.content) {
+            throw new Error('读取文件失败：' + (fileData?.error || '未知错误'));
+        }
+        
+        // 解析JSON数据
+        let importedData;
+        try {
+            importedData = JSON.parse(fileData.content);
+            
+            // 验证JSON格式是否符合知识库要求
+            if (!importedData.papers || !Array.isArray(importedData.papers)) {
+                throw new Error('导入的文件格式不正确，缺少papers数组');
+            }
+        } catch (jsonError) {
+            throw new Error('解析JSON文件失败：' + jsonError.message);
+        }
+        
+        // 确认导入操作
+        const confirmMessage = `确认导入？这将导入 ${importedData.papers.length} 篇论文。\n\n选择"合并"将保留当前知识库中的论文并添加新论文（重复的将被跳过）。\n选择"替换"将清空当前知识库并导入新的论文。`;
+        
+        const confirmResult = await window.electronAPI.showInputBox({
+            type: 'confirm',
+            options: {
+                type: 'question',
+                buttons: ['合并', '替换', '取消'],
+                defaultId: 0,
+                title: '确认导入',
+                message: confirmMessage
+            }
+        });
+        
+        if (confirmResult === 2 || confirmResult === undefined) {
+            console.log('用户取消了导入确认');
+            return false;
+        }
+        
+        // 根据用户选择执行不同的导入操作
+        if (confirmResult === 0) { // 合并
+            // 加载当前知识库
+            const currentItems = loadKnowledgeBase();
+            
+            // 创建链接集合用于去重
+            const existingLinks = new Set(currentItems.map(item => item.link));
+            
+            // 合并两个知识库，去除重复项
+            let mergedItems = [...currentItems];
+            let addedCount = 0;
+            
+            for (const paper of importedData.papers) {
+                if (!existingLinks.has(paper.link)) {
+                    mergedItems.push(paper);
+                    existingLinks.add(paper.link);
+                    addedCount++;
+                }
+            }
+            
+            knowledgeBaseItems = mergedItems;
+            
+            // 显示导入结果
+            alert(`导入成功！\n合并了 ${importedData.papers.length} 篇论文，其中新增 ${addedCount} 篇。`);
+        } else { // 替换
+            knowledgeBaseItems = importedData.papers;
+            
+            // 显示导入结果
+            alert(`导入成功！\n替换为 ${importedData.papers.length} 篇论文。`);
+        }
+        
+        // 保存到本地存储
+        saveKnowledgeBase(knowledgeBaseItems);
+        
+        // 保存到文件
+        await saveKnowledgeBaseToFile();
+        
+        // 重新渲染知识库
+        renderKnowledgeBase();
+        
+        return true;
+    } catch (error) {
+        console.error('导入知识库失败:', error);
+        alert('导入知识库失败: ' + error.message);
+        return false;
+    }
+}
+
+/**
+ * @description 更新所有复选框状态
+ */
+function updateCheckboxStates() {
+    // 检查当前页上是否所有论文都被选中
+    const checkboxes = papersTableBody.querySelectorAll('input[type="checkbox"]');
+    const allChecked = checkboxes.length > 0 && 
+                        Array.from(checkboxes).every(cb => cb.checked);
+    
+    // 更新"全选"复选框状态
+    selectAllPapers.checked = allChecked;
+}
+
+// 添加全选复选框事件监听器
+selectAllPapers.addEventListener('change', () => {
+    const isChecked = selectAllPapers.checked;
+    
+    if (isChecked) {
+        // 选择所有页面的论文（不只是当前页）
+        allPapers.forEach(paper => {
+            selectedPaperIds.add(paper.id || paper.link);
+        });
+    } else {
+        // 清空所有选择
+        selectedPaperIds.clear();
+    }
+    
+    // 更新当前页面上的复选框状态
+    const checkboxes = papersTableBody.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = isChecked;
+    });
+});
+
+// 添加导出按钮事件监听器
+exportButton.addEventListener('click', () => {
+    // 获取选中的论文数量
+    const selectedCount = document.querySelectorAll('#papersTableBody input[type="checkbox"]:checked').length;
+    
+    if (selectedCount === 0) {
+        alert('请至少选择一篇论文来导出');
+        return;
+    }
+    
+    // 显示导出选项弹窗
+    exportOptionsModal.style.display = 'flex';
+    setTimeout(() => {
+        exportOptionsModal.classList.add('modal-open');
+    }, 10);
+});
+
+// 关闭导出选项弹窗
+closeExportOptionsModal.addEventListener('click', () => {
+    exportOptionsModal.classList.remove('modal-open');
+    setTimeout(() => {
+        exportOptionsModal.style.display = 'none';
+    }, 300);
+});
+
+// 导出到JSON文件按钮
+exportToFile.addEventListener('click', async () => {
+    try {
+        // 关闭导出选项弹窗
+        exportOptionsModal.classList.remove('modal-open');
+        setTimeout(() => {
+            exportOptionsModal.style.display = 'none';
+        }, 300);
+        
+        // 创建要导出的论文列表
+        const selectedPapers = allPapers.filter(paper => 
+            selectedPaperIds.has(paper.id || paper.link)
+        );
+        
+        if (selectedPapers.length === 0) {
+            alert('未选择任何论文，请先选择要导出的论文');
+            return;
+        }
+        
+        // 创建包含当前日期时间的默认文件名（精确到分钟）
+        const now = new Date();
+        const dateTimeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+        const defaultFilename = `arxiv论文导出_${dateTimeStr}.json`;
+        
+        // 获取从设置中保存的路径
+        const savedPath = localStorage.getItem('paperExportPath');
+        let finalPath = '';
+        
+        if (!savedPath) {
+            // 如果没有保存的路径，显示文件保存对话框
+            const options = {
+                title: '导出选中的论文',
+                buttonLabel: '导出',
+                defaultPath: defaultFilename,
+                filters: [
+                    { name: 'JSON文件', extensions: ['json'] }
+                ]
+            };
+            
+            const result = await window.electronAPI.showInputBox({
+                type: 'file-save',
+                options: options
+            });
+            
+            if (!result || !result.filePath) {
+                console.log('用户取消了导出操作');
+                return;
+            }
+            
+            finalPath = result.filePath;
+            
+            // 询问用户是否保存此路径
+            const savePath = confirm('是否将当前导出路径保存为默认路径？');
+            if (savePath) {
+                // 仅保存目录部分，不包括文件名
+                const directoryPath = finalPath.substring(0, finalPath.lastIndexOf('\\') + 1);
+                localStorage.setItem('paperExportPath', directoryPath);
+                paperExportPath.value = directoryPath;
+            }
+        } else {
+            // 使用保存的路径 + 默认文件名
+            finalPath = savedPath + defaultFilename;
+        }
+        
+        // 准备导出数据
+        const exportData = {
+            timestamp: new Date().toISOString(),
+            count: selectedPapers.length,
+            papers: selectedPapers
+        };
+        
+        // 保存到文件
+        const saveResult = await window.electronAPI.saveFile(
+            finalPath, 
+            JSON.stringify(exportData, null, 2)
+        );
+        
+        if (!saveResult || !saveResult.success) {
+            throw new Error('保存文件失败：' + (saveResult?.error || '未知错误'));
+        }
+        
+        alert(`导出成功！\n已导出 ${selectedPapers.length} 篇论文到：\n${finalPath}`);
+    } catch (error) {
+        console.error('导出论文失败:', error);
+        alert('导出论文失败: ' + error.message);
+    }
+});
+
+// 关闭文件保存弹窗
+closeExportModal.addEventListener('click', () => {
+    exportModal.classList.remove('modal-open');
+    setTimeout(() => {
+        exportModal.style.display = 'none';
+    }, 300);
+});
+
+// 导出到知识库按钮
+exportToKnowledgeBase.addEventListener('click', async () => {
+    try {
+        // 关闭导出选项弹窗
+        exportOptionsModal.classList.remove('modal-open');
+        setTimeout(() => {
+            exportOptionsModal.style.display = 'none';
+        }, 300);
+        
+        // 创建要导出的论文列表
+        const selectedPapers = allPapers.filter(paper => 
+            selectedPaperIds.has(paper.id || paper.link)
+        );
+        
+        // 调用添加到知识库的函数
+        const result = await addToKnowledgeBase(selectedPapers);
+        
+        if (result.success) {
+            let message = '';
+            
+            if (result.addedCount > 0 && result.duplicateCount === 0) {
+                // 只有添加成功的论文
+                message = `已成功添加 ${result.addedCount} 篇论文到知识库！`;
+            } else if (result.addedCount === 0 && result.duplicateCount > 0) {
+                // 只有重复的论文
+                message = `所选的 ${result.duplicateCount} 篇论文已存在于知识库中，未添加新论文。`;
+                if (result.duplicateTitles.length > 0) {
+                    message += `\n\n包括：\n${result.duplicateTitles.join('\n')}`;
+                    if (result.duplicateCount > result.duplicateTitles.length) {
+                        message += `\n以及其他 ${result.duplicateCount - result.duplicateTitles.length} 篇论文...`;
+                    }
+                }
+            } else {
+                // 有添加成功和重复的论文
+                message = `已成功添加 ${result.addedCount} 篇论文到知识库！\n跳过了 ${result.duplicateCount} 篇已存在的论文。`;
+                if (result.duplicateTitles.length > 0) {
+                    message += `\n\n已存在的论文包括：\n${result.duplicateTitles.join('\n')}`;
+                    if (result.duplicateCount > result.duplicateTitles.length) {
+                        message += `\n以及其他 ${result.duplicateCount - result.duplicateTitles.length} 篇论文...`;
+                    }
+                }
+            }
+            
+            // 显示提示弹窗
+            alert(message);
+        } else {
+            throw new Error(result.error || '添加到知识库失败，未知错误');
+        }
+    } catch (error) {
+        console.error('添加到知识库失败:', error);
+        alert('添加到知识库失败: ' + error.message);
+    }
+});
+
+// 取消导出按钮事件
+cancelExport.addEventListener('click', () => {
+    exportModal.classList.remove('modal-open');
+    setTimeout(() => {
+        exportModal.style.display = 'none';
+    }, 300);
+});
+
+// 选择文件夹按钮事件
+confirmExport.addEventListener('click', async () => {
+    try {
+        // 隐藏弹窗
+        exportModal.classList.remove('modal-open');
+        setTimeout(() => {
+            exportModal.style.display = 'none';
+        }, 300);
+        
+        // 调用选择文件夹的API
+        const result = await window.electronAPI.showInputBox({
+            type: 'directory',
+            options: {
+                title: '选择导出文件夹',
+                buttonLabel: '选择此文件夹'
+            }
+        });
+        
+        if (!result || !result.filePath) {
+            console.log('用户取消了选择文件夹操作');
+            return;
+        }
+        
+        // 保存选择的路径
+        const selectedPath = result.filePath + '\\';
+        localStorage.setItem('paperExportPath', selectedPath);
+        paperExportPath.value = selectedPath;
+        
+        alert(`已设置默认导出路径为: ${selectedPath}`);
+    } catch (error) {
+        console.error('选择导出路径失败:', error);
+        alert('选择导出路径失败: ' + error.message);
+    }
 });
