@@ -2229,9 +2229,31 @@ function loadKnowledgeBase() {
         if (savedPath) {
             knowledgeBaseSavePath = savedPath;
             knowledgeBasePath.value = savedPath;
+            
+            // 尝试从文件中读取知识库数据
+            const filePath = `${savedPath}/knowledge-base.json`;
+            try {
+                // 使用window.electronAPI.saveFile函数的逻辑来读取文件
+                // 注意：这里是同步读取，因为loadKnowledgeBase不是async函数
+                if (window.electronAPI && typeof window.electronAPI.readFile === 'function') {
+                    // 如果预加载脚本中提供了readFile函数，则使用它
+                    const fileData = window.electronAPI.readFile(filePath);
+                    if (fileData && fileData.success && fileData.content) {
+                        console.log('从文件中成功加载知识库数据');
+                        const parsedData = JSON.parse(fileData.content);
+                        // 保存到localStorage以备不时之需
+                        localStorage.setItem('knowledgeBase', JSON.stringify(parsedData.papers || []));
+                        return parsedData.papers || [];
+                    }
+                }
+                // 如果readFile函数不可用或读取失败，会继续执行后面的代码
+            } catch (fileError) {
+                console.error('从文件读取知识库数据失败:', fileError);
+                // 文件读取失败，继续尝试从localStorage读取
+            }
         }
         
-        // 尝试从localStorage获取知识库数据
+        // 如果从文件读取失败或没有保存路径，尝试从localStorage获取知识库数据
         const savedData = localStorage.getItem('knowledgeBase');
         if (savedData) {
             return JSON.parse(savedData);
@@ -2303,6 +2325,13 @@ async function saveKnowledgeBaseToFile() {
 async function addToKnowledgeBase(papers) {
     try {
         console.log('执行addToKnowledgeBase函数，论文数量:', papers.length);
+        
+        // 先从localStorage获取知识库路径
+        const savedPath = localStorage.getItem('knowledgeBasePath');
+        if (savedPath) {
+            knowledgeBaseSavePath = savedPath;
+            knowledgeBasePath.value = savedPath;
+        }
         
         // 加载现有知识库
         const existingItems = loadKnowledgeBase();
@@ -2416,564 +2445,19 @@ async function addToKnowledgeBase(papers) {
  */
 async function removeFromKnowledgeBase(id) {
     try {
-        // 确保当前知识库数据已加载
-        if (knowledgeBaseItems.length === 0) {
-            knowledgeBaseItems = loadKnowledgeBase();
+        // 先从localStorage获取知识库路径
+        const savedPath = localStorage.getItem('knowledgeBasePath');
+        if (savedPath) {
+            knowledgeBaseSavePath = savedPath;
+            knowledgeBasePath.value = savedPath;
         }
+        
+        // 确保当前知识库数据已加载
+        knowledgeBaseItems = loadKnowledgeBase();
         
         // 找到要删除的索引
         const index = knowledgeBaseItems.findIndex(item => item.link === id);
-        if (index === -1) return false;
-        
-        // 从数组中移除
-        knowledgeBaseItems.splice(index, 1);
-        
-        // 保存变更
-        saveKnowledgeBase(knowledgeBaseItems);
-        await saveKnowledgeBaseToFile();
-        
-        // 重新渲染
-        renderKnowledgeBase();
-        
-        return true;
-    } catch (error) {
-        console.error('从知识库中移除失败:', error);
-        return false;
-    }
-}
-
-/**
- * @description 更新知识库中论文的已读状态
- * @param {String} id 论文ID（链接）
- * @param {Boolean} isRead 是否已读
- * @returns {Boolean} 是否更新成功
- */
-async function updateKnowledgeBaseItemReadStatus(id, isRead) {
-    try {
-        // 确保当前知识库数据已加载
-        if (knowledgeBaseItems.length === 0) {
-            knowledgeBaseItems = loadKnowledgeBase();
-        }
-        
-        // 找到要更新的论文
-        const item = knowledgeBaseItems.find(item => item.link === id);
-        if (!item) return false;
-        
-        // 更新状态
-        item.isRead = isRead;
-        
-        // 保存变更
-        saveKnowledgeBase(knowledgeBaseItems);
-        await saveKnowledgeBaseToFile();
-        
-        // 重新渲染（可选）
-        renderKnowledgeBase();
-        
-        return true;
-    } catch (error) {
-        console.error('更新已读状态失败:', error);
-        return false;
-    }
-}
-
-/**
- * @description 更新知识库中论文的笔记
- * @param {String} id 论文ID
- * @param {String} notes 笔记内容
- * @returns {Boolean} 是否更新成功
- */
-async function updateKnowledgeBaseItemNotes(id, notes) {
-    try {
-        console.log('更新笔记', id, notes);
-        // 确保当前知识库数据已加载
-        if (knowledgeBaseItems.length === 0) {
-            knowledgeBaseItems = loadKnowledgeBase();
-        }
-        
-        // 找到要更新的论文
-        const itemIndex = knowledgeBaseItems.findIndex(item => item.link === id);
-        if (itemIndex === -1) {
-            console.error('未找到要更新的论文', id);
-            return false;
-        }
-        
-        // 更新笔记
-        knowledgeBaseItems[itemIndex].notes = notes;
-        
-        // 如果当前正在查看的是这个论文，同时更新当前详情对象
-        if (currentDetailItem && currentDetailItem.link === id) {
-            currentDetailItem.notes = notes;
-            // 更新显示的笔记
-            detailNotes.innerHTML = notes ? notes.replace(/\n/g, '<br>') : '<em>暂无笔记</em>';
-        }
-        
-        // 保存变更
-        saveKnowledgeBase(knowledgeBaseItems);
-        await saveKnowledgeBaseToFile();
-        
-        console.log('笔记已成功更新');
-        return true;
-    } catch (error) {
-        console.error('更新笔记失败:', error);
-        return false;
-    }
-}
-
-/**
- * @description 显示知识库中论文的详情页
- * @param {String} id 论文ID（链接）
- */
-function showKnowledgeBaseItemDetail(id) {
-    try {
-        // 确保当前知识库数据已加载
-        if (knowledgeBaseItems.length === 0) {
-            knowledgeBaseItems = loadKnowledgeBase();
-        }
-        
-        // 找到要显示的论文
-        const item = knowledgeBaseItems.find(item => item.link === id);
-        if (!item) {
-            console.error('未找到指定ID的论文');
-            return;
-        }
-        
-        // 保存当前详情论文
-        currentDetailItem = item;
-        
-        // 重置显示原文状态
-        isShowingOriginal = false;
-        
-        // 更新详情内容
-        updateDetailContent(item);
-        
-        // 显示详情页
-        detailModal.style.display = 'block';
-        
-        // 移除自动标记为已读的逻辑
-    } catch (error) {
-        console.error('显示详情页失败:', error);
-    }
-}
-
-/**
- * @description 更新详情页内容
- * @param {Object} item 论文项
- */
-function updateDetailContent(item) {
-    if (!item) return;
-    
-    // 根据当前显示状态决定使用哪个标题和摘要
-    // 优先考虑显示翻译内容，除非用户明确要求显示原文
-    // isShowingOriginal为true时显示原文，为false时优先显示翻译版本
-    let title, summary;
-    
-    if (isShowingOriginal) {
-        // 用户要求显示原文
-        title = item.originalTitle || item.title;
-        summary = item.originalSummary || item.summary;
-    } else {
-        // 用户要求显示翻译版本（或默认状态）
-        // 优先使用翻译版本，如果没有则使用当前标题和摘要
-        title = item.translatedTitle || item.title;
-        summary = item.translatedSummary || item.summary;
-    }
-    
-    // 更新UI
-    detailTitle.textContent = title;
-    detailAuthors.textContent = `作者: ${item.authors}`;
-    detailDate.textContent = `发布日期: ${item.published}`;
-    
-    // 清空并填充分类标签
-    detailCategories.innerHTML = '';
-    if (item.categories && item.categories.length > 0) {
-        item.categories.forEach(category => {
-            const categoryElem = document.createElement('div');
-            categoryElem.className = 'detail-category';
-            categoryElem.textContent = category;
-            detailCategories.appendChild(categoryElem);
-        });
-    }
-    
-    // 填充摘要
-    detailAbstract.textContent = summary;
-    
-    // 填充笔记
-    detailNotes.innerHTML = item.notes ? item.notes.replace(/\n/g, '<br>') : '<em>暂无笔记</em>';
-    notesTextarea.value = item.notes || '';
-    
-    // 更新语言切换按钮显示状态
-    // 判断是否存在原文和翻译版本以决定是否显示语言切换按钮
-    if ((item.translatedTitle || item.translatedSummary) && (item.originalTitle || item.originalSummary)) {
-        toggleLanguageButton.textContent = isShowingOriginal ? '显示中文' : '显示原文';
-        languageToggleContainer.style.display = 'flex';
-        } else {
-        languageToggleContainer.style.display = 'none';
-    }
-    
-    // 更新文章链接按钮
-    if (item.link) {
-        linkButton.style.display = 'inline-block';
-        linkButton.onclick = async () => {
-            try {
-                console.log('点击知识库文章原文链接:', item.link);
-                const success = await window.electronAPI.openExternal(item.link);
-                if (!success) {
-                    console.warn('通过API打开链接失败，尝试使用备用方法');
-                    // 备用方法：尝试使用window.open
-                    window.open(item.link, '_blank');
-                }
-    } catch (error) {
-                console.error('打开知识库文章链接失败:', error);
-                alert(`无法打开链接，请手动复制并在浏览器中打开: ${item.link}`);
-            }
-        };
-    } else {
-        linkButton.style.display = 'none';
-    }
-    
-    // 添加一个标记已读/未读按钮
-    // 首先检查是否已经存在，存在则移除
-    const existingMarkReadButton = document.getElementById('markReadButton');
-    if (existingMarkReadButton) {
-        existingMarkReadButton.remove();
-    }
-    
-    // 创建新的按钮
-    const markReadButton = document.createElement('button');
-    markReadButton.id = 'markReadButton';
-    markReadButton.className = item.isRead ? 'secondary-button' : 'primary-button';
-    markReadButton.textContent = item.isRead ? '标记为未读' : '标记为已读';
-    
-    // 添加点击事件
-    markReadButton.addEventListener('click', () => {
-        updateKnowledgeBaseItemReadStatus(item.link, !item.isRead);
-        // 更新按钮状态
-        markReadButton.className = !item.isRead ? 'secondary-button' : 'primary-button';
-        markReadButton.textContent = !item.isRead ? '标记为未读' : '标记为已读';
-    });
-    
-    // 添加到语言切换容器
-    languageToggleContainer.appendChild(markReadButton);
-}
-
-// 为语言切换按钮添加事件监听
-toggleLanguageButton.addEventListener('click', () => {
-    if (!currentDetailItem) return;
-    
-    // 切换显示状态
-    isShowingOriginal = !isShowingOriginal;
-    
-    // 更新显示内容
-    updateDetailContent(currentDetailItem);
-});
-
-/**
- * @description 更新论文的选中状态
- */
-function updateCheckboxStates() {
-    const checkboxes = document.querySelectorAll('#papersTableBody input[type="checkbox"]');
-    const selectAllCheckbox = document.getElementById('selectAllPapers');
-    
-    // 如果没有复选框，直接返回
-    if (checkboxes.length === 0) return;
-    
-    // 检查是否所有复选框都被选中
-    let allChecked = true;
-    checkboxes.forEach(checkbox => {
-        if (!checkbox.checked) {
-            allChecked = false;
-        }
-    });
-    
-    // 更新全选复选框状态
-    if (selectAllCheckbox) {
-        selectAllCheckbox.checked = allChecked && checkboxes.length > 0;
-    }
-}
-
-/**
- * @description 处理导出按钮点击
- */
-exportButton.addEventListener('click', async function() {
-    console.log('导出按钮被点击');
-    
-    try {
-        // 检查是否有论文数据
-        if (allPapers.length === 0) {
-            console.log('没有可导出的论文数据');
-            alert('没有可导出的论文数据，请先搜索论文');
-            return;
-        }
-        
-        console.log('当前已选择论文数量:', selectedPaperIds.size);
-        console.log('总论文数量:', allPapers.length);
-        
-        // 检查是否有选中的论文
-        if (selectedPaperIds.size === 0) {
-            // 提示用户是否导出所有论文
-            console.log('没有选择论文，询问用户是否导出全部');
-            if (!confirm(`您当前没有选择任何论文，是否导出全部 ${allPapers.length} 篇论文？`)) {
-                console.log('用户取消了导出全部论文');
-                return;
-            }
-            console.log('用户确认导出全部论文');
-        }
-        
-        // 显示导出选项弹窗
-        console.log('显示导出选项弹窗');
-        showExportOptionsModal();
-    } catch (error) {
-        console.error('导出按钮点击处理出错:', error);
-        alert('导出操作失败: ' + error.message);
-    }
-});
-
-// 添加全选/取消全选事件监听器
-selectAllPapers.addEventListener('change', function() {
-    const isChecked = this.checked;
-    
-    // 1. 更新当前页面上所有复选框的状态
-    const checkboxes = document.querySelectorAll('#papersTableBody input[type="checkbox"]');
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = isChecked;
-    });
-    
-    // 2. 更新全局选中集合 - 处理所有论文，不仅是当前页面显示的论文
-    if (isChecked) {
-        // 选中所有论文
-        allPapers.forEach(paper => {
-            selectedPaperIds.add(paper.id || paper.link);
-        });
-        console.log(`已全选所有论文，共 ${allPapers.length} 篇`);
-    } else {
-        // 取消选中所有论文
-        selectedPaperIds.clear();
-        console.log('已取消全选');
-    }
-});
-
-// 在显示导出选项弹窗
-function showExportOptionsModal() {
-    console.log('执行showExportOptionsModal函数');
-    
-    // 检查导出选项弹窗元素是否存在
-    if (!exportOptionsModal) {
-        console.error('无法找到导出选项弹窗元素');
-        alert('导出功能出错：无法找到导出选项弹窗元素');
-        return;
-    }
-    
-    // 将弹窗设置为可见
-    console.log('添加modal-open类');
-    exportOptionsModal.style.display = 'flex';
-    setTimeout(() => {
-        exportOptionsModal.classList.add('modal-open');
-        console.log('modal-open类已添加');
-    }, 10);
-}
-
-// 在关闭导出选项弹窗时
-function hideExportOptionsModal() {
-    console.log('执行hideExportOptionsModal函数');
-    
-    // 检查导出选项弹窗元素是否存在
-    if (!exportOptionsModal) {
-        console.error('无法找到导出选项弹窗元素');
-        return;
-    }
-    
-    // 隐藏弹窗
-    console.log('移除modal-open类');
-    exportOptionsModal.classList.remove('modal-open');
-    
-    // 延迟设置display为none，等待过渡效果完成
-    setTimeout(() => {
-        exportOptionsModal.style.display = 'none';
-        console.log('弹窗已完全隐藏');
-    }, 300);
-}
-
-// 关闭导出选项弹窗按钮
-closeExportOptionsModal.addEventListener('click', () => {
-    hideExportOptionsModal();
-});
-
-// 导出到JSON文件
-exportToFile.addEventListener('click', async () => {
-    hideExportOptionsModal();
-    await exportPapers();
-});
-
-// 添加到知识库
-exportToKnowledgeBase.addEventListener('click', async () => {
-    hideExportOptionsModal();
-    
-    try {
-        console.log('开始导出论文到知识库...');
-        
-        // 检查是否有论文数据
-        if (allPapers.length === 0) {
-            alert('没有可导出的论文数据');
-            return;
-        }
-        
-        // 准备导出数据
-        const isExportTranslated = isTranslated;
-        const data = formatPapersForExport(isExportTranslated);
-        
-        console.log(`准备添加 ${data.papers.length} 篇论文到知识库`);
-        
-        // 确保知识库数据已加载
-        if (knowledgeBaseItems.length === 0) {
-            console.log('知识库为空，加载知识库数据...');
-            knowledgeBaseItems = loadKnowledgeBase();
-        }
-        
-        // 将论文添加到知识库
-        const addedCount = await addToKnowledgeBase(data.papers);
-        
-        // 显示结果
-        if (addedCount > 0) {
-            console.log(`成功添加 ${addedCount} 篇论文到知识库`);
-            alert(`成功添加 ${addedCount} 篇论文到知识库！`);
-            
-            try {
-                // 直接调用知识库标签的点击事件处理，这会自动完成所有UI更新和渲染
-                console.log('直接调用知识库标签点击处理');
-                knowledgeBaseTab.click();
-                console.log('知识库标签页切换完成');
-            } catch (error) {
-                console.error('切换到知识库标签页失败:', error);
-                alert('添加成功，但切换到知识库标签页失败，请手动点击"我的知识库"标签查看');
-            }
-        } else {
-            alert('没有新的论文添加到知识库');
-        }
-    } catch (error) {
-        console.error('导出论文到知识库失败:', error);
-        alert(`导出论文到知识库失败: ${error.message}`);
-    }
-});
-
-/**
- * @description 格式化论文数据用于导出
- * @param {boolean} isTranslated 是否使用翻译后的数据
- * @returns {Object} 包含论文数据和元数据的对象
- */
-function formatPapersForExport(isTranslated) {
-    try {
-        // 确定要导出的论文
-        let papersToExport = [];
-        
-        // 选择要导出的论文源
-        const sourcePapers = isTranslated && translatedPapers.length > 0 ? translatedPapers : allPapers;
-        
-        // 如果有选中的论文，仅导出选中的
-        if (selectedPaperIds.size > 0) {
-            papersToExport = sourcePapers.filter(paper => selectedPaperIds.has(paper.id || paper.link));
-        } else {
-            // 否则导出全部
-            papersToExport = [...sourcePapers];
-        }
-        
-        // 为导出数据添加元数据
-        const exportData = {
-            timestamp: new Date().toISOString(),
-            isTranslated: isTranslated,
-            count: papersToExport.length,
-            papers: papersToExport
-        };
-        
-        return exportData;
-    } catch (error) {
-        console.error('格式化论文数据失败:', error);
-        throw new Error('格式化论文数据失败: ' + error.message);
-    }
-}
-
-/**
- * @description 导出论文为JSON文件
- * @returns {Promise<boolean>} 是否导出成功
- */
-async function exportPapers() {
-    try {
-        console.log('开始导出论文...');
-        
-        // 检查是否有论文数据
-        if (allPapers.length === 0) {
-            alert('没有可导出的论文数据');
-            return false;
-        }
-        
-        // 准备导出数据
-        const isExportTranslated = isTranslated;
-        const data = formatPapersForExport(isExportTranslated);
-        
-        console.log(`准备导出 ${data.count} 篇论文`);
-        
-        try {
-            // 使用正确的API请求保存文件
-            console.log('显示文件保存对话框');
-            const dialogResult = await window.electronAPI.showInputBox({
-                title: '导出论文数据',
-                defaultValue: 'arxiv-papers.json'
-            });
-            
-            console.log('文件保存对话框结果:', dialogResult);
-            
-            if (dialogResult.canceled) {
-                console.log('用户取消了导出');
-                return false;
-            }
-            
-            // 准备JSON数据
-            console.log('准备JSON数据');
-            const jsonData = JSON.stringify(data, null, 2);
-            console.log('JSON数据长度:', jsonData.length);
-            
-            // 保存文件
-            console.log('调用saveFile API保存文件到:', dialogResult.fullPath);
-            const saveResult = await window.electronAPI.saveFile(
-                dialogResult.fullPath,
-                jsonData
-            );
-            
-            console.log('保存文件结果:', saveResult);
-            
-            if (saveResult && saveResult.success) {
-                alert(`成功导出 ${data.count} 篇论文到: ${saveResult.path}`);
-                return true;
-            } else {
-                alert('导出失败: ' + (saveResult?.error || '未知错误'));
-                return false;
-            }
-        } catch (dialogError) {
-            console.error('文件对话框或保存过程出错:', dialogError);
-            alert(`导出过程出错: ${dialogError.message}`);
-            return false;
-        }
-    } catch (error) {
-        console.error('导出论文失败:', error);
-        console.error('错误堆栈:', error.stack);
-        alert(`导出论文失败: ${error.message}`);
-        return false;
-    }
-}
-
-/**
- * @description 渲染知识库内容
- */
-function renderKnowledgeBase() {
-    try {
-        console.log('执行renderKnowledgeBase函数');
-        
-        // 确保知识库数据已加载
-        if (knowledgeBaseItems.length === 0) {
-            console.log('知识库为空，加载知识库数据');
-            knowledgeBaseItems = loadKnowledgeBase();
-        }
-        
-        console.log(`准备渲染知识库，当前有 ${knowledgeBaseItems.length} 篇论文`);
+        console.log(`已加载知识库数据，当前有 ${knowledgeBaseItems.length} 篇论文`);
         
         // 确保知识库网格元素存在
         if (!knowledgeBaseGrid) {
