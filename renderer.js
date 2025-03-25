@@ -167,7 +167,14 @@ function createSearchFieldRow() {
     
     const select = document.createElement('select');
     select.className = 'search-field';
+    select.setAttribute('autocomplete', 'off'); // 添加autocomplete="off"属性
     select.innerHTML = searchField.innerHTML;
+    
+    // 添加click事件处理，防止下拉框点击后立即关闭
+    select.addEventListener('click', function(e) {
+        // 仅阻止事件冒泡，让浏览器处理下拉框的展开和收起
+        e.stopPropagation();
+    });
     
     const input = document.createElement('input');
     input.type = 'text';
@@ -757,6 +764,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // 初始化用户输入
     if (!maxResults.value || isNaN(parseInt(maxResults.value))) {
         maxResults.value = 40;
+    }
+    
+    // 修复搜索字段下拉框点击后立即关闭的问题
+    if (searchField) {
+        // 使用onclick事件，这比mousedown更适合处理下拉框
+        searchField.addEventListener('click', function(e) {
+            // 仅阻止事件冒泡，让浏览器处理下拉框的展开和收起
+            e.stopPropagation();
+        });
     }
     
     // 禁用分页按钮，直到有结果
