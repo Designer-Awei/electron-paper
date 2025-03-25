@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://export.arxiv.org https://export.arxiv.org https://api.siliconflow.cn; script-src 'self'; style-src 'self' 'unsafe-inline';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://export.arxiv.org https://export.arxiv.org https://api.siliconflow.cn; script-src 'self'; style-src 'self' 'unsafe-inline'; script-src-elem 'self';">
     <title>Electron Paper</title>
     <style>
         body {
@@ -1241,27 +1241,40 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
             font-weight: bold;
             font-size: 16px;
         }
 
         .detail-notes {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             font-size: 15px;
             line-height: 1.6;
             color: #333;
             white-space: pre-line;
+            padding: 8px;
+            text-align: left;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        #notesViewMode {
+            width: 100%;
+            text-align: left;
         }
 
         .detail-textarea {
             width: 100%;
-            min-height: 120px;
+            min-height: 150px;
             padding: 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 15px;
             line-height: 1.6;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            resize: vertical;
+            box-sizing: border-box;
         }
 
         .detail-save {
@@ -1552,7 +1565,7 @@
                     <div class="detail-notes" id="detailNotes"></div>
                 </div>
                 <div id="notesEditMode" style="display: none;">
-                    <textarea class="detail-textarea" id="notesTextarea"></textarea>
+                    <textarea class="detail-textarea" id="notesTextarea" placeholder="在此输入您的笔记..." spellcheck="false"></textarea>
                     <div class="detail-save">
                         <button id="cancelEditNotes" class="secondary-button" style="margin-right: 10px;">取消</button>
                         <button id="saveNotes" class="primary-button">保存笔记</button>
