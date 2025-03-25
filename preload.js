@@ -441,10 +441,23 @@ async function selectDirectory() {
  */
 async function saveFile(filePath, content) {
     try {
+        console.log('开始保存文件到路径:', filePath);
+        console.log('文件内容长度:', content.length);
+        
+        // 确保目录存在
+        const dirPath = path.dirname(filePath);
+        if (!fs.existsSync(dirPath)) {
+            console.log('目录不存在，尝试创建:', dirPath);
+            fs.mkdirSync(dirPath, { recursive: true });
+        }
+        
+        // 写入文件
         fs.writeFileSync(filePath, content, 'utf8');
+        console.log('文件保存成功');
         return { success: true, path: filePath };
     } catch (error) {
         console.error('保存文件失败:', error);
+        console.error('错误详情:', error.stack);
         return { success: false, error: error.message, path: filePath };
     }
 }

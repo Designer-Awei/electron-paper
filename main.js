@@ -377,36 +377,58 @@ app.whenReady().then(() => {
 
   // 处理输入框对话框请求
   ipcMain.handle('dialog:showInputBox', async (event, options) => {
-    // 获取当前窗口
-    const focusedWindow = BrowserWindow.getFocusedWindow();
-    
-    // 创建包含当前日期时间的默认文件名
-    const now = new Date();
-    const dateTimeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
-    
-    // 确保文件名中含有扩展名
-    const defaultFileName = options.defaultValue ? options.defaultValue.replace('.json', '') : 'arxiv-papers';
-    const defaultPath = `${defaultFileName}_${dateTimeStr}.json`;
-    
-    // 使用保存文件对话框让用户输入文件名
-    const result = await dialog.showSaveDialog(focusedWindow, {
-      title: options.title || '保存文件',
-      defaultPath: defaultPath,
-      buttonLabel: '保存',
-      filters: [
-        { name: 'JSON文件', extensions: ['json'] }
-      ]
-    });
-    
-    if (result.canceled) {
-      // 用户取消了保存操作
-      return { canceled: true, value: '' };
-    } else {
-      // 用户选择了保存位置和文件名
-      // 提取文件名（不含路径和扩展名）
-      const fullPath = result.filePath;
-      const fileName = path.basename(fullPath, '.json');
-      return { canceled: false, value: fileName, fullPath: fullPath };
+    try {
+      console.log('收到showInputBox请求，选项:', options);
+      
+      // 获取当前窗口
+      const focusedWindow = BrowserWindow.getFocusedWindow();
+      
+      // 创建包含当前日期时间的默认文件名
+      const now = new Date();
+      const dateTimeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+      
+      // 确保文件名中含有扩展名
+      const defaultFileName = options.defaultValue ? options.defaultValue.replace('.json', '') : 'arxiv-papers';
+      const defaultPath = `${defaultFileName}_${dateTimeStr}.json`;
+      
+      console.log('使用默认文件路径:', defaultPath);
+      
+      // 使用保存文件对话框让用户输入文件名
+      console.log('显示保存文件对话框');
+      const result = await dialog.showSaveDialog(focusedWindow, {
+        title: options.title || '保存文件',
+        defaultPath: defaultPath,
+        buttonLabel: '保存',
+        filters: [
+          { name: 'JSON文件', extensions: ['json'] }
+        ]
+      });
+      
+      console.log('对话框结果:', result);
+      
+      if (result.canceled) {
+        // 用户取消了保存操作
+        console.log('用户取消了保存操作');
+        return { canceled: true, value: '' };
+      } else {
+        // 用户选择了保存位置和文件名
+        // 提取文件名（不含路径和扩展名）
+        const fullPath = result.filePath;
+        const fileName = path.basename(fullPath, '.json');
+        console.log('用户选择了保存位置:', fullPath);
+        
+        // 检查目录是否存在
+        const dirPath = path.dirname(fullPath);
+        if (!fs.existsSync(dirPath)) {
+          console.log('目录不存在，将在保存时创建:', dirPath);
+        }
+        
+        return { canceled: false, value: fileName, fullPath: fullPath };
+      }
+    } catch (error) {
+      console.error('showInputBox处理错误:', error);
+      console.error('错误堆栈:', error.stack);
+      return { canceled: true, value: '', error: error.message };
     }
   });
 
