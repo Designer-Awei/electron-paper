@@ -3361,3 +3361,324 @@ confirmExport.addEventListener('click', async () => {
         alert('选择导出路径失败: ' + error.message);
     }
 });
+
+/**
+ * @description 聊天相关功能
+ */
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+
+// 获取DOM元素
+let chatContainer, chatSidebar, summonButton, minimizeButton, expandButton;
+let chatInput, voiceButton, sendButton, chatMessages;
+
+// 隐藏聊天框
+function hideChat() {
+    if (!chatContainer || !chatSidebar) return;
+    chatContainer.classList.remove('visible');
+    setTimeout(() => {
+        chatContainer.style.display = 'none';
+        chatSidebar.style.display = 'block'; // 确保侧边栏显示
+        chatSidebar.classList.add('visible');
+    }, 300);
+}
+
+// 显示聊天框
+function showChat() {
+    if (!chatContainer || !chatSidebar) return;
+    chatContainer.style.display = 'flex';
+    setTimeout(() => {
+        chatContainer.classList.add('visible');
+        chatSidebar.style.display = 'none'; // 隐藏侧边栏
+        chatSidebar.classList.remove('visible');
+    }, 10);
+}
+
+// 完全关闭聊天
+function closeChat() {
+    if (!chatContainer || !chatSidebar) return;
+    chatContainer.classList.remove('visible');
+    setTimeout(() => {
+        chatContainer.style.display = 'none';
+        chatSidebar.classList.remove('visible');
+    }, 300);
+}
+
+// 自动调整输入框高度
+function adjustInputHeight() {
+    if (!chatInput) return;
+    chatInput.style.height = 'auto';
+    const newHeight = Math.min(chatInput.scrollHeight, parseInt(getComputedStyle(chatInput).maxHeight));
+    chatInput.style.height = `${newHeight}px`;
+}
+
+// 初始化聊天界面
+function initChat() {
+    // 获取所有需要的DOM元素
+    chatContainer = document.getElementById('chatContainer');
+    chatSidebar = document.getElementById('chatSidebar');
+    summonButton = document.getElementById('summonAwei');
+    minimizeButton = document.getElementById('minimizeChat');
+    chatInput = document.getElementById('chatInput');
+    voiceButton = document.getElementById('voiceInput');
+    sendButton = document.getElementById('sendMessage');
+    chatMessages = document.getElementById('chatMessages');
+
+    // 检查所有必需的DOM元素是否存在
+    if (!chatContainer || !chatSidebar || !summonButton || !minimizeButton || 
+        !chatInput || !voiceButton || !sendButton || !chatMessages) {
+        console.error('聊天组件初始化失败：部分DOM元素未找到');
+        return;
+    }
+
+    // 初始化界面状态
+    chatContainer.style.display = 'none';
+    chatSidebar.style.display = 'none';
+    
+    // 添加欢迎消息
+    addMessage('你好！我是你的学术导师Awei。我可以帮你：\n1. 推荐论文检索关键词\n2. 分析研究方向\n3. 解答学术问题\n请问有什么可以帮你的吗？', 'bot');
+
+    // 绑定事件监听器
+    summonButton.addEventListener('click', showChat);
+    minimizeButton.addEventListener('click', hideChat);
+    chatSidebar.addEventListener('click', showChat);
+    sendButton.addEventListener('click', sendMessage);
+    chatInput.addEventListener('input', adjustInputHeight);
+    
+    // 语音输入相关事件
+    voiceButton.addEventListener('mousedown', startRecording);
+    voiceButton.addEventListener('mouseup', stopRecording);
+    voiceButton.addEventListener('mouseleave', stopRecording);
+
+    // 回车发送消息
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    console.log('聊天组件初始化完成');
+}
+
+// 在DOM加载完成后初始化聊天功能
+document.addEventListener('DOMContentLoaded', () => {
+    initChat();
+});
+
+// 添加消息到聊天框
+function addMessage(text, type) {
+    const messageContainer = document.createElement('div');
+    messageContainer.className = `message ${type}-message`;
+    
+    // 创建消息内容元素
+    const messageContent = document.createElement('div');
+    messageContent.className = 'message-content';
+    messageContent.textContent = text;
+    messageContainer.appendChild(messageContent);
+    
+    // 如果是机器人消息，检查是否包含搜索建议
+    if (type === 'bot' && text.includes('搜索建议：')) {
+        const [message, suggestions] = text.split('搜索建议：');
+        messageContent.textContent = message;
+        
+        if (suggestions) {
+            const suggestionsDiv = document.createElement('div');
+            suggestionsDiv.className = 'search-suggestions';
+            
+            suggestions.trim().split('\n').forEach(suggestion => {
+                if (suggestion.trim()) {
+                    const suggestionButton = document.createElement('button');
+                    suggestionButton.className = 'search-suggestion';
+                    suggestionButton.textContent = suggestion;
+                    suggestionButton.onclick = () => {
+                        document.getElementById('searchInput').value = suggestion;
+                        document.getElementById('searchButton').click();
+                    };
+                    suggestionsDiv.appendChild(suggestionButton);
+                }
+            });
+            
+            messageContainer.appendChild(suggestionsDiv);
+        }
+    }
+    
+    chatMessages.appendChild(messageContainer);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// 发送消息
+async function sendMessage() {
+    const message = chatInput.value.trim();
+    if (!message) return;
+    
+    // 添加用户消息
+    addMessage(message, 'user');
+    chatInput.value = '';
+    
+    try {
+        // 获取API密钥和模型设置
+        const apiKey = localStorage.getItem('siliconflow_api_key');
+        const model = localStorage.getItem('selected_model') || 'THUDM/glm-4-9b-chat';
+        
+        if (!apiKey) {
+            addMessage('请先在设置中配置SiliconFlow API密钥。', 'bot');
+            return;
+        }
+        
+        // 显示正在输入状态
+        addMessage('正在思考...', 'bot');
+        
+        // 调用AI助手
+        const response = await window.electronAPI.chatWithAI(message, apiKey, model);
+        
+        // 移除"正在思考"消息
+        chatMessages.removeChild(chatMessages.lastChild);
+        
+        // 添加AI回复
+        addMessage(response.reply, 'bot');
+        
+        // 如果有搜索建议，添加到回复中
+        if (response.searchSuggestions && response.searchSuggestions.length > 0) {
+            const suggestionsText = '搜索建议：\n' + response.searchSuggestions.join('\n');
+            addMessage(suggestionsText, 'bot');
+        }
+    } catch (error) {
+        console.error('发送消息失败:', error);
+        addMessage('抱歉，出现了一些问题：' + error.message, 'bot');
+    }
+}
+
+// 语音输入相关
+async function startRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = (event) => {
+            audioChunks.push(event.data);
+        };
+        
+        mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            // 这里需要实现语音转文字的逻辑
+            // 暂时直接提示功能未实现
+            addMessage('语音转文字功能正在开发中...', 'bot');
+        };
+        
+        mediaRecorder.start();
+        isRecording = true;
+        voiceButton.textContent = '松开结束';
+        voiceButton.classList.add('recording');
+    } catch (error) {
+        console.error('开启录音失败:', error);
+        addMessage('无法开启录音功能，请检查麦克风权限。', 'bot');
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        voiceButton.textContent = '按住说话';
+        voiceButton.classList.remove('recording');
+    }
+}
+
+// 绑定事件监听
+summonButton.addEventListener('click', showChat);
+minimizeButton.addEventListener('click', hideChat);
+expandButton.addEventListener('click', showChat);
+sendButton.addEventListener('click', sendMessage);
+
+chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+voiceButton.addEventListener('mousedown', startRecording);
+voiceButton.addEventListener('mouseup', stopRecording);
+voiceButton.addEventListener('mouseleave', stopRecording);
+
+/**
+ * @description 初始化聊天功能
+ */
+function initChatFeatures() {
+    // 获取DOM元素
+    const chatContainer = document.getElementById('chatContainer');
+    const chatSidebar = document.getElementById('chatSidebar');
+    const summonButton = document.getElementById('summonAwei');
+    const minimizeButton = document.getElementById('minimizeChat');
+    const expandButton = document.getElementById('expandChat');
+    const chatInput = document.getElementById('chatInput');
+    const voiceButton = document.getElementById('voiceInput');
+    const sendButton = document.getElementById('sendMessage');
+    const chatMessages = document.getElementById('chatMessages');
+
+    if (!chatContainer || !chatSidebar || !summonButton || !minimizeButton || 
+        !expandButton || !chatInput || !voiceButton || !sendButton || !chatMessages) {
+        console.error('聊天组件初始化失败：部分DOM元素未找到');
+        return;
+    }
+
+    // 初始化聊天界面
+    chatContainer.style.display = 'flex';
+    chatContainer.classList.remove('visible');
+    chatSidebar.style.display = 'block';
+
+    // 添加欢迎消息
+    addMessage('你好！我是你的学术导师Awei。我可以帮你：\n1. 推荐论文检索关键词\n2. 分析研究方向\n3. 解答学术问题\n请问有什么可以帮你的吗？', 'bot');
+
+    // 自动调整输入框高度
+    function adjustInputHeight() {
+        chatInput.style.height = 'auto';
+        const newHeight = Math.min(chatInput.scrollHeight, parseInt(getComputedStyle(chatInput).maxHeight));
+        chatInput.style.height = `${newHeight}px`;
+    }
+
+    // 显示聊天框
+    function showChat() {
+        chatContainer.style.display = 'flex';
+        setTimeout(() => {
+            chatContainer.classList.add('visible');
+        }, 10);
+        chatSidebar.style.display = 'none';
+    }
+
+    // 隐藏聊天框
+    function hideChat() {
+        chatContainer.classList.remove('visible');
+        setTimeout(() => {
+            chatSidebar.style.display = 'block';
+        }, 300);
+    }
+
+    // 绑定事件监听器
+    summonButton.addEventListener('click', showChat);
+    minimizeButton.addEventListener('click', hideChat);
+    expandButton.addEventListener('click', showChat);
+    chatInput.addEventListener('input', adjustInputHeight);
+    sendButton.addEventListener('click', sendMessage);
+    
+    // 语音输入相关事件
+    voiceButton.addEventListener('mousedown', startRecording);
+    voiceButton.addEventListener('mouseup', stopRecording);
+    voiceButton.addEventListener('mouseleave', stopRecording);
+
+    // 回车发送消息
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+}
+
+// 在DOM加载完成后初始化聊天功能
+document.addEventListener('DOMContentLoaded', () => {
+    initChatFeatures();
+});

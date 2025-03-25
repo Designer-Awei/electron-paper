@@ -488,6 +488,68 @@ function readFile(filePath) {
     }
 }
 
+/**
+ * @description 调用SiliconFlow API进行对话
+ * @param {string} message - 用户输入的消息
+ * @param {string} apiKey - SiliconFlow API密钥
+ * @param {string} model - 选择的模型
+ * @returns {Promise<string>} 返回AI的回复
+ */
+async function chatWithSiliconFlow(message, apiKey, model) {
+    try {
+        const response = await axios.post('https://api.siliconflow.cn/v1/chat/completions', {
+            model: model,
+            messages: [
+                {
+                    role: "system",
+                    content: "你是一位资深学术导师，专门帮助研究人员进行文献检索和学术研究。你的回答应该专业、准确，并且富有洞察力。"
+                },
+                {
+                    role: "user",
+                    content: message
+                }
+            ]
+        }, {
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        return response.data.choices[0].message.content;
+    } catch (error) {
+        console.error('调用SiliconFlow API失败:', error);
+        throw new Error('与AI助手通信失败，请检查网络连接和API密钥');
+    }
+}
+
+/**
+ * @description 分析用户问题是否需要联网搜索
+ * @param {string} question - 用户问题
+ * @returns {boolean} 是否需要联网
+ */
+function needsWebSearch(question) {
+    const webSearchKeywords = [
+        '最新', '最近', '新闻', '进展', '发展', '趋势', '现状',
+        '比较', '区别', '优缺点', '评测', '评价', '如何选择',
+        '市场', '价格', '排名', '推荐', '热门'
+    ];
+    
+    return webSearchKeywords.some(keyword => question.includes(keyword));
+}
+
+/**
+ * @description 使用puppeteer爬取网页内容
+ * @param {string} url - 要爬取的网页URL
+ * @returns {Promise<string>} 返回网页内容
+ */
+async function crawlWebContent(url) {
+    // 这里需要实现网页爬取逻辑
+    // 由于涉及到puppeteer的配置和使用，这部分代码需要单独处理
+    // 暂时返回空字符串
+    return '';
+}
+
 // 将 Electron API 暴露给渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
     // arXiv API 相关
@@ -536,5 +598,41 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     // 语言相关
     getLanguage: () => ipcRenderer.invoke('get-language'),
-    onLanguageChanged: (callback) => ipcRenderer.on('language-changed', (_, language) => callback(language))
+    onLanguageChanged: (callback) => ipcRenderer.on('language-changed', (_, language) => callback(language)),
+    
+    // 添加聊天相关API
+    chatWithAI: async (message, apiKey, model) => {
+        try {
+            // 判断是否需要联网搜索
+            const requiresWebSearch = needsWebSearch(message);
+            
+            if (requiresWebSearch) {
+                // 如果需要联网搜索，先进行网络搜索
+                const webResults = await webSearch(message);
+                // 将搜索结果整合到问题中
+                message = `基于以下搜索结果回答问题："${message}"\n\n搜索结果：${webResults}`;
+            }
+            
+            // 调用AI进行对话
+            const response = await chatWithSiliconFlow(message, apiKey, model);
+            
+            // 如果是关于论文检索的问题，生成搜索建议
+            if (message.includes('论文') || message.includes('检索') || message.includes('搜索')) {
+                // 这里可以实现搜索建议的逻辑
+                // 暂时返回空数组
+                return {
+                    reply: response,
+                    searchSuggestions: []
+                };
+            }
+            
+            return {
+                reply: response,
+                searchSuggestions: null
+            };
+        } catch (error) {
+            console.error('AI对话失败:', error);
+            throw error;
+        }
+    }
 }); 
