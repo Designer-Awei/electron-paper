@@ -462,6 +462,32 @@ async function saveFile(filePath, content) {
     }
 }
 
+/**
+ * @description 读取文件内容
+ * @param {string} filePath - 文件路径
+ * @returns {Object} 包含文件内容的对象
+ */
+function readFile(filePath) {
+    try {
+        console.log('开始读取文件:', filePath);
+        
+        // 检查文件是否存在
+        if (!fs.existsSync(filePath)) {
+            console.log('文件不存在:', filePath);
+            return { success: false, error: '文件不存在', path: filePath };
+        }
+        
+        // 读取文件内容
+        const content = fs.readFileSync(filePath, 'utf8');
+        console.log('文件读取成功，内容长度:', content.length);
+        return { success: true, content, path: filePath };
+    } catch (error) {
+        console.error('读取文件失败:', error);
+        console.error('错误详情:', error.stack);
+        return { success: false, error: error.message, path: filePath };
+    }
+}
+
 // 将 Electron API 暴露给渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
     // arXiv API 相关
@@ -492,6 +518,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 文件操作相关
     selectDirectory: () => ipcRenderer.invoke('select-directory'),
     saveFile: (filePath, content) => saveFile(filePath, content),
+    readFile: (filePath) => readFile(filePath),
     
     // 对话框相关
     showInputBox: (options) => ipcRenderer.invoke('dialog:showInputBox', options),

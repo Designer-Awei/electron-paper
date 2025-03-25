@@ -38,6 +38,7 @@
             box-sizing: border-box;
             flex-wrap: nowrap;
             margin-bottom: 0;
+            height: 40px; /* 统一设置高度为40px */
         }
         .search-group {
             display: grid;
@@ -71,7 +72,7 @@
             width: 112px;
             min-width: 112px;
             max-width: 112px;
-            height: 36px;
+            height: 40px; /* 从36px修改为40px */
             flex-shrink: 0;
             margin: 0;
         }
@@ -122,10 +123,10 @@
             flex: 1;
         }
         .control-group {
+            margin-top: 2px; 
+            height: 40px; /* 从48px修改为40px */
             display: flex;
             align-items: center;
-            gap: 12px;
-            flex-wrap: nowrap;
         }
         .search-container select,
         .search-container input[type="text"],
@@ -167,6 +168,7 @@
             align-items: center;
             padding: 0;
             flex-direction: row;
+            margin: 2px 0; /* 修改为2px边距，确保总高度为40px */
         }
         .results-per-page span {
             color: #666;
@@ -283,14 +285,15 @@
             width: 100%;
             position: relative;
             overflow-x: hidden;
-            margin-bottom: 4px; /* 与其他元素保持一致的底部间距 */
+            margin-bottom: 0px; /* 从4px改为0px */
         }
         #additionalFields .field-row {
-            margin-top: 4px; /* 每个字段行顶部添加4px间距 */
+            margin-top: 0px; /* 从4px改为0px */
             margin-bottom: 0; /* 重置底部间距 */
+            height: 40px; /* 确保每行高度一致 */
         }
         #additionalFields .field-row:first-child {
-            margin-top: 2px; /* 从4px减小到2px，使第一个字段与主搜索框更近 */
+            margin-top: 0px; /* 从2px改为0px */
         }
         table {
             width: 100%;
@@ -404,10 +407,10 @@
         .search-options {
             display: flex;
             align-items: flex-start; /* 从顶部对齐，便于垂直堆叠 */
-            gap: 4px; /* 从16px改为4px，与其他行保持一致的间距 */
+            gap: 0px; /* 从4px改为0px，去除间距 */
             flex-wrap: wrap; /* 允许换行 */
             justify-content: space-between; /* 两端对齐 */
-            margin-top: 4px; /* 与上方行距一致 */
+            margin-top: 6px; /* 添加上边距使其与上方搜索行保持一致 */
         }
         
         /* 添加过滤器选择容器，确保不换行 */
@@ -420,8 +423,10 @@
             min-width: 380px;
             flex-shrink: 0; /* 防止缩小 */
             overflow-x: auto; /* 当空间不足时允许滚动 */
-            padding-bottom: 2px; /* 为可能的滚动条预留空间 */
+            padding-bottom: 0px;
             width: auto; /* 让宽度自适应内容 */
+            height: 40px; /* 从48px修改为40px */
+            margin: 0; /* 边距为0 */
         }
         
         .filter-row select {
@@ -613,7 +618,7 @@
             }
             
             .control-group {
-                margin-top: 4px; /* 从8px改为4px，保持一致的行距 */
+                margin-top: 0px; /* 从4px改为0px，去除行距 */
             }
         }
         
@@ -1329,7 +1334,7 @@
     </div>
     
     <div id="mainSearchContainer" class="search-container">
-        <div class="search-row" style="flex-wrap: nowrap; overflow-x: auto; margin-bottom: 2px;">
+        <div class="search-row" style="flex-wrap: nowrap; overflow-x: auto; margin-bottom: 0px; height: 40px;">
             <div class="search-group">
                 <select id="searchField" autocomplete="off">
                     <option value="all">所有字段</option>
@@ -1351,9 +1356,9 @@
                 <button class="secondary-button" id="addFieldBtn">添加字段</button>
             </div>
         </div>
-        <div id="additionalFields" style="margin-bottom: 4px;"></div>
+        <div id="additionalFields" style="margin-bottom: 0px;"></div>
         <div class="search-options" style="margin-top: 0px;">
-            <div class="filter-row">
+            <div class="filter-row" style="height: 40px; margin: 0;">
                 <select id="timeRange">
                     <option value="all_time" selected>所有时间</option>
                     <option value="last_month">最近一个月</option>
@@ -1371,12 +1376,12 @@
                     <option value="ascending">升序</option>
                 </select>
             </div>
-            <div class="control-group" style="gap: 12px;">
-                <div class="results-per-page" style="margin-right: 0;">
+            <div class="control-group" style="gap: 12px; margin-top: 2px; height: 40px; display: flex; align-items: center;">
+                <div class="results-per-page" style="margin: 2px 0;">
                     <span>结果限制</span>
                     <input type="number" id="maxResults" min="1" max="100" value="40">
                 </div>
-                <div class="button-container" style="margin-left: 0;">
+                <div class="button-container" style="margin-left: 0; height: 40px;">
                     <button class="primary-button" id="searchButton">搜索</button>
                 </div>
             </div>
