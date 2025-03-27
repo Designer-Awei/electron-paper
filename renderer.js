@@ -3665,8 +3665,101 @@ function addMessage(text, type) {
             messageContent.innerHTML = textContent;
         }
     } else {
-        // 普通文本，直接设置内容
-        messageContent.textContent = trimmedText;
+        // 普通文本，需要处理Markdown格式
+        if (type === 'bot') {
+            // 检测是否为初始欢迎消息
+            const isWelcomeMessage = trimmedText.includes('你好！我是你的学术导师Awei') && 
+                                     trimmedText.includes('推荐论文检索关键词') &&
+                                     trimmedText.includes('解答学术问题');
+            
+            // 检查并处理分隔线 - 使用更强的检测正则表达式
+            if (trimmedText.includes('---')) {
+                // 记录console日志，辅助调试
+                console.log('检测到分隔线，开始处理分隔线');
+                console.log('原始文本:', trimmedText);
+                
+                // 清空现有内容
+                messageContent.innerHTML = '';
+                
+                // 将文本按分隔线分割，使用更准确的正则
+                const parts = trimmedText.split(/(-{3,})/g);
+                console.log('分割后的部分:', parts);
+                
+                // 处理分割后的各个部分
+                // 跟踪是否已经添加了一个分隔线
+                let hasAddedSeparator = false;
+                
+                for (let i = 0; i < parts.length; i++) {
+                    const part = parts[i].trim();
+                    
+                    // 跳过空部分
+                    if (!part) continue;
+                    
+                    // 如果部分是纯分隔线
+                    if (/^-{3,}$/.test(part)) {
+                        // 只添加第一个分隔线，忽略后续的分隔线
+                        if (!hasAddedSeparator) {
+                            console.log('添加分隔线元素');
+                            const hr = document.createElement('hr');
+                            messageContent.appendChild(hr);
+                            hasAddedSeparator = true;
+                        }
+                    }
+                    // 处理文本内容部分
+                    else {
+                        console.log('处理文本部分:', part);
+                        const textNode = document.createElement('div');
+                        
+                        // 去除可能的系统提示文字
+                        let processedText = part;
+                        
+                        // 去除"首先"开头的提示词
+                        processedText = processedText.replace(/^首先，\s*提供专业、准确、简洁的学术分析[，：,:]?\s*/i, '');
+                        
+                        // 去除"提取"开头的提示词
+                        processedText = processedText.replace(/^提取适合检索的关键词\s*/i, '');
+                        
+                        // 去掉"快捷检索选项："前缀
+                        processedText = processedText.replace(/^快捷检索选项：\s*/i, '');
+                        
+                        // 过滤Markdown标记，但如果是欢迎消息则保留序号
+                        if (isWelcomeMessage) {
+                            // 只过滤一部分Markdown符号，保留序号格式
+                            textNode.textContent = processedText.replace(/(\*\*|__|\*|_|~~|##|###|####|#####|######)/g, '');
+                        } else {
+                            // 完全过滤Markdown符号，包括序号（除非是欢迎消息）
+                            textNode.textContent = processedText.replace(/(\*\*|__|\*|_|~~|##|###|####|#####|######|\d+\.|[\-\+])/g, '');
+                        }
+                        
+                        messageContent.appendChild(textNode);
+                    }
+                }
+            } else {
+                // 没有分隔线的普通文本
+                let processedText = trimmedText;
+                
+                // 去除"首先"开头的提示词
+                processedText = processedText.replace(/^首先，\s*提供专业、准确、简洁的学术分析[，：,:]?\s*/i, '');
+                
+                // 去除"提取"开头的提示词
+                processedText = processedText.replace(/^提取适合检索的关键词\s*/i, '');
+                
+                // 去掉"快捷检索选项："前缀
+                processedText = processedText.replace(/^快捷检索选项：\s*/i, '');
+                
+                // 过滤Markdown标记，但如果是欢迎消息则保留序号
+                if (isWelcomeMessage) {
+                    // 只过滤一部分Markdown符号，保留序号格式
+                    messageContent.textContent = processedText.replace(/(\*\*|__|\*|_|~~|##|###|####|#####|######)/g, '');
+                } else {
+                    // 完全过滤Markdown符号，包括序号
+                    messageContent.textContent = processedText.replace(/(\*\*|__|\*|_|~~|##|###|####|#####|######|\d+\.|[\-\+])/g, '');
+                }
+            }
+        } else {
+            // 用户消息直接设置内容，不处理Markdown
+            messageContent.textContent = trimmedText;
+        }
     }
     
     messageContainer.appendChild(messageContent);
@@ -3686,28 +3779,41 @@ function addMessage(text, type) {
         
         // 如果有提取到搜索建议，创建快捷检索选项区域
         if (suggestions.length > 0) {
-            const suggestionsDiv = document.createElement('div');
-            suggestionsDiv.className = 'search-suggestions';
+            // 判断回复是否与学术相关
+            const isAcademicResponse = containsAcademicContent(trimmedText);
             
-            // 添加标题
-            const titleDiv = document.createElement('div');
-            titleDiv.className = 'suggestions-title';
-            titleDiv.textContent = '快捷检索选项';
-            suggestionsDiv.appendChild(titleDiv);
-            
-            // 添加每个检索选项按钮
-            suggestions.forEach(suggestion => {
-                const suggestionButton = document.createElement('button');
-                suggestionButton.className = 'search-suggestion';
-                suggestionButton.textContent = suggestion;
-                suggestionButton.onclick = () => {
-                    // 使用和历史搜索相同的方式应用到搜索表单
-                    applySuggestion(suggestion);
-                };
-                suggestionsDiv.appendChild(suggestionButton);
-            });
-            
-            messageContainer.appendChild(suggestionsDiv);
+            if (isAcademicResponse) {
+                const suggestionsDiv = document.createElement('div');
+                suggestionsDiv.className = 'search-suggestions';
+                
+                // 添加标题
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'suggestions-title';
+                titleDiv.textContent = '快捷检索选项';
+                suggestionsDiv.appendChild(titleDiv);
+                
+                // 创建一个新的容器来包含按钮，并设置为块级元素以便换行
+                const buttonsContainer = document.createElement('div');
+                buttonsContainer.className = 'suggestion-buttons-container';
+                buttonsContainer.style.display = 'block';
+                buttonsContainer.style.marginTop = '12px';  // 从8px增加到12px
+                suggestionsDiv.appendChild(buttonsContainer);
+                
+                // 添加每个检索选项按钮到新容器中，而不是直接添加到suggestionsDiv
+                suggestions.forEach(suggestion => {
+                    const suggestionButton = document.createElement('button');
+                    suggestionButton.className = 'search-suggestion';
+                    suggestionButton.textContent = suggestion;
+                    suggestionButton.style.margin = '4px';  // 添加外边距增加按钮间距
+                    suggestionButton.onclick = () => {
+                        // 使用和历史搜索相同的方式应用到搜索表单
+                        applySuggestion(suggestion);
+                    };
+                    buttonsContainer.appendChild(suggestionButton);
+                });
+                
+                messageContainer.appendChild(suggestionsDiv);
+            }
         }
     }
     
@@ -3716,6 +3822,36 @@ function addMessage(text, type) {
     
     // 返回消息容器元素，以便后续能够引用和删除
     return messageContainer;
+}
+
+/**
+ * @description 判断回复内容是否与学术相关
+ * @param {string} text - 回复文本
+ * @returns {boolean} 是否与学术相关
+ */
+function containsAcademicContent(text) {
+    // 学术相关的关键词
+    const academicKeywords = [
+        '论文', '研究', '文献', '学术', '科学', '理论', '方法', '实验', 
+        '数据', '分析', '结果', '观点', '综述', '引用', '参考文献',
+        '期刊', '会议', '发表', '出版', '作者', '贡献', '发现',
+        'paper', 'research', 'study', 'analysis', 'method', 'theory'
+    ];
+    
+    // 检查是否包含学术关键词
+    const containsKeywords = academicKeywords.some(keyword => 
+        text.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    // 检查是否包含学术标记
+    const containsAcademicMarkers = 
+        text.includes('研究表明') || 
+        text.includes('学术观点') || 
+        text.includes('文献综述') ||
+        /\[\d+\]/.test(text) || // 引用标记 [1], [2] 等
+        /\(\d{4}\)/.test(text); // 年份标记 (2020) 等
+    
+    return containsKeywords || containsAcademicMarkers;
 }
 
 // 发送消息
@@ -3763,7 +3899,10 @@ async function sendMessage() {
             // 检查回复中是否已包含搜索建议格式的内容
             const hasSuggestionFormat = /【.+?】/.test(replyContent);
             
-            if (!hasSuggestionFormat) {
+            // 检查问题是否与学术相关
+            const isAcademicMessage = containsAcademicContent(message) || containsAcademicContent(replyContent);
+            
+            if (!hasSuggestionFormat && isAcademicMessage) {
                 // 在回复末尾添加搜索建议
                 if (!replyContent.endsWith('\n')) {
                     replyContent += '\n\n';

@@ -1572,6 +1572,13 @@
             white-space: pre-wrap;
         }
         
+        /* 分隔线样式 */
+        .message-content hr {
+            border: none;
+            border-top: 1px solid #e8e8e8;
+            margin: 10px 0;
+        }
+        
         /* 搜索建议样式优化 */
         .search-suggestions {
             margin-top: 15px;
@@ -1605,6 +1612,25 @@
             background-color: #e0f0ff;
             border-color: #4CAF50;
             color: #4CAF50;
+        }
+        
+        /* 搜索建议按钮容器样式 */
+        .suggestion-buttons-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;  /* 从8px增加到12px */
+            margin-top: 12px;  /* 从8px增加到12px */
+        }
+        
+        /* 修改搜索建议按钮的样式 */
+        .search-suggestion {
+            padding: 6px 12px;  /* 从4px 8px调整为6px 12px */
+            background-color: #e8f5e9;
+            border-radius: 4px;
+            font-size: 13px;  /* 从12px增加到13px，提高可读性 */
+            cursor: pointer;
+            border: 1px solid #4CAF50;
+            margin: 4px;  /* 增加按钮间的外边距 */
         }
         
         /* 语音按钮样式优化 */

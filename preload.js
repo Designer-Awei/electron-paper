@@ -503,14 +503,26 @@ async function chatWithSiliconFlow(message, apiKey, model) {
     try {
         // 系统提示词，明确指导AI在回复中提供应用内检索建议
         let systemPrompt = `你是一位资深学术导师Awei，专门帮助研究人员梳理研究思路并使用本应用内的论文检索功能。
-请严格按照以下格式回复用户:
 
-1. 首先，提供专业、准确、简洁的学术分析，基于你的专业知识回答用户的问题
-2. 然后，在回复的末尾提供2-3个适合在本应用内搜索的关键词，使用【关键词】格式标注，例如【机器学习】【深度学习】
-3. 不要建议用户访问外部数据库（如Google Scholar、IEEE Xplore等），因为用户当前已在使用的就是本应用的论文检索系统
-4. 你的关键词建议会自动转化为应用内的"快捷检索选项"，用户点击后会直接在应用内搜索
+请先判断用户的问题类型：
+1. 判断用户问题是一般性问题还是学术研究问题
+2. 如果是一般性问题（例如日常问候、闲聊、非学术咨询等），请正常回答，不需要提供搜索建议
+3. 如果是学术研究问题（涉及到论文、研究方向、学术概念、文献检索等），则按以下格式回复
 
-记住，用户只需要在本应用内进行检索，不需要去外部网站。每次回复都必须包含用【】格式标注的关键词建议。`;
+首先，提供专业、准确、简洁的学术分析，基于你的专业知识回答用户的问题
+
+---
+
+提取适合检索的关键词
+
+---
+
+快捷检索选项：在回复的末尾提供2-3个适合在本应用内搜索的关键词，使用【关键词】格式标注，例如【机器学习】【深度学习】
+
+不要建议用户访问外部数据库（如Google Scholar、IEEE Xplore等），因为用户当前已在使用的就是本应用的论文检索系统
+你的关键词建议会自动转化为应用内的"快捷检索选项"，用户点击后会直接在应用内搜索
+
+记住，只有学术相关问题才需要提供【】格式的关键词建议。对于一般性问题，请直接回答，不要添加这些格式化的建议。`;
 
         console.log('调用SiliconFlow API...');
         
@@ -586,17 +598,35 @@ async function chatWithSiliconFlow(message, apiKey, model) {
 function extractSearchSuggestions(reply, userMessage) {
     console.log('开始提取搜索建议，原始回复长度:', reply.length);
     
-    // 如果用户消息与论文、检索或关键词相关，尝试提取搜索建议
+    // 判断消息类型：是否为学术相关的问题
+    // 1. 基于用户消息判断
     const academicKeywords = ['论文', '检索', '关键词', '搜索', '文献', '研究', '学术', '查找', 
-                             '期刊', '数据库', '引用', 'paper', 'research', 'keyword'];
+                             '期刊', '数据库', '引用', '方法论', '理论', '实验', '数据集', 
+                             '算法', '模型', '分析', '综述', 'paper', 'research', 'keyword',
+                             'algorithm', 'dataset', 'method', 'study', 'analysis', 'review'];
                              
     // 检查用户消息是否包含学术关键词
     const isAcademicQuery = academicKeywords.some(keyword => 
         userMessage.toLowerCase().includes(keyword.toLowerCase())
     );
     
-    if (isAcademicQuery) {
-        console.log('检测到学术相关查询，开始提取搜索建议');
+    // 2. 基于AI回复判断 - 检查回复是否包含【】格式的关键词建议
+    // 这是最直接的判断方式，如果AI认为这是学术问题，会添加关键词建议
+    const hasSuggestionFormat = /【.+?】/.test(reply);
+    
+    // 3. 检查回复中是否包含常见的学术回复标记
+    const hasAcademicResponseMarkers = 
+        reply.includes('研究表明') || 
+        reply.includes('学术观点') || 
+        reply.includes('文献综述') || 
+        reply.includes('研究方向') ||
+        reply.includes('实验结果') ||
+        reply.includes('理论基础') ||
+        /\[\d+\]/.test(reply); // 引用标记 [1], [2] 等
+    
+    // 综合判断：如果是学术查询 或 回复包含关键词建议格式 或 回复包含学术标记，则提取搜索建议
+    if (isAcademicQuery || hasSuggestionFormat || hasAcademicResponseMarkers) {
+        console.log('检测到学术相关查询或回复，开始提取搜索建议');
         let suggestions = [];
         
         // 1. 首先尝试提取【】格式的建议（优先级最高）
@@ -657,8 +687,8 @@ function extractSearchSuggestions(reply, userMessage) {
             }
         }
         
-        // 如果上面的方法都没提取到，尝试直接从最后一段提取
-        if (suggestions.length === 0) {
+        // 如果上面的方法都没提取到，并且确实是学术问题，尝试从最后一段提取
+        if (suggestions.length === 0 && isAcademicQuery) {
             const paragraphs = reply.split('\n\n');
             if (paragraphs.length > 0) {
                 const lastParagraph = paragraphs[paragraphs.length - 1].trim();
@@ -688,7 +718,7 @@ function extractSearchSuggestions(reply, userMessage) {
         return finalSuggestions;
     }
     
-    console.log('非学术相关查询，不提取搜索建议');
+    console.log('非学术相关查询或AI未提供关键词建议，不返回搜索建议');
     return [];
 }
 
