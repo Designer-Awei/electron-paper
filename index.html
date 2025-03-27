@@ -1317,7 +1317,7 @@
             right: -360px; /* 初始位置在屏幕外 */
             top: 80px;
             width: 360px;
-            height: calc(100vh - 140px); /* 修改为自动计算高度，减去顶部间距和底部分页栏高度 */
+            height: calc(100vh - 200px); /* 修改为更大的底部间距，避免被分页栏遮挡 */
             background-color: white;
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -1325,8 +1325,9 @@
             display: none; /* 初始状态隐藏 */
             flex-direction: column;
             overflow: hidden;
-            transition: right 0.3s ease;
-            margin-bottom: 60px; /* 添加底部边距，避免被分页栏遮挡 */
+            transition: right 0.3s ease, bottom 0.3s ease, height 0.3s ease; /* 添加bottom和height过渡效果 */
+            margin-bottom: 60px; /* 保留底部边距 */
+            bottom: auto; /* 添加bottom属性，以便动态调整位置 */
         }
 
         /* 显示聊天框时的样式 */

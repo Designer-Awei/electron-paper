@@ -2822,7 +2822,7 @@ cancelEditNotes.addEventListener('click', () => {
 });
 
 // 添加保存笔记按钮事件监听
-saveNotes.addEventListener('click', () => {
+saveNotes.addEventListener('click', async () => {
     if (!currentDetailItem) return;
     
     // 获取笔记内容
@@ -2835,7 +2835,18 @@ saveNotes.addEventListener('click', () => {
     const itemIndex = knowledgeBaseItems.findIndex(item => item.link === currentDetailItem.link);
     if (itemIndex !== -1) {
         knowledgeBaseItems[itemIndex].notes = notes;
+        
+        // 保存到本地存储
         saveKnowledgeBase(knowledgeBaseItems);
+        
+        // 同时保存到文件，确保重启软件后笔记不会丢失
+        try {
+            await saveKnowledgeBaseToFile();
+            console.log('笔记已保存到本地文件');
+        } catch (error) {
+            console.error('保存笔记到文件失败:', error);
+            alert('笔记已保存在本地，但保存到文件失败，重启软件后可能丢失。错误: ' + error.message);
+        }
     }
     
     // 更新显示
@@ -3382,6 +3393,7 @@ let isRecording = false;
 // 获取DOM元素
 let chatContainer, chatSidebar, summonButton, minimizeButton, expandButton;
 let chatInput, voiceButton, sendButton, chatMessages;
+let adjustChatContainerPosition; // 声明为全局函数变量
 
 // 隐藏聊天框
 function hideChat() {
@@ -3398,10 +3410,21 @@ function hideChat() {
 function showChat() {
     if (!chatContainer || !chatSidebar) return;
     chatContainer.style.display = 'flex';
+    
+    // 调用adjustChatContainerPosition确保聊天框位置正确
+    if (typeof adjustChatContainerPosition === 'function') {
+        adjustChatContainerPosition();
+    }
+    
     setTimeout(() => {
         chatContainer.classList.add('visible');
         chatSidebar.style.display = 'none'; // 隐藏侧边栏
         chatSidebar.classList.remove('visible');
+        
+        // 再次调用adjustChatContainerPosition确保过渡后位置正确
+        if (typeof adjustChatContainerPosition === 'function') {
+            adjustChatContainerPosition();
+        }
     }, 10);
 }
 
@@ -3435,6 +3458,9 @@ function initChat() {
     sendButton = document.getElementById('sendMessage'); // 修正ID
     chatMessages = document.getElementById('chatMessages');
     clearHistoryButton = document.getElementById('clearChatHistory'); // 声明清除历史按钮变量
+    
+    // 获取分页栏元素
+    const paginationElement = document.querySelector('.pagination');
 
     // 检查所有必需的DOM元素是否存在
     if (!chatContainer || !chatSidebar || !summonButton || !minimizeButton || 
@@ -3474,6 +3500,33 @@ function initChat() {
             sendMessage();
         }
     });
+
+    // 定义全局聊天框位置调整函数
+    adjustChatContainerPosition = function() {
+        if (!chatContainer || !paginationElement) return;
+        
+        // 获取分页栏的位置信息
+        const paginationRect = paginationElement.getBoundingClientRect();
+        const windowHeight = window.innerHeight;
+        
+        // 计算分页栏距离窗口底部的距离
+        const bottomDistance = windowHeight - paginationRect.top;
+        
+        // 调整聊天框的高度，确保其底部与分页栏保持适当距离
+        if (bottomDistance > 0) {
+            chatContainer.style.height = `calc(100vh - 80px - ${bottomDistance + 20}px)`;
+        }
+    };
+    
+    // 初始调整位置
+    adjustChatContainerPosition();
+    
+    // 添加窗口大小变化和滚动事件监听
+    window.addEventListener('resize', adjustChatContainerPosition);
+    window.addEventListener('scroll', adjustChatContainerPosition);
+    
+    // 定期检查并调整位置（处理动态加载的内容可能导致的布局变化）
+    setInterval(adjustChatContainerPosition, 1000);
 
     console.log('聊天组件初始化完成');
 }
