@@ -9,6 +9,16 @@ const remote = require('@electron/remote/main');
 // 初始化remote模块
 remote.initialize();
 
+// 尝试加载puppeteer
+let puppeteer;
+try {
+  puppeteer = require('puppeteer');
+  console.log('Puppeteer加载成功');
+} catch (error) {
+  console.warn('未安装puppeteer，某些网络搜索功能可能不可用。建议执行：npm install puppeteer');
+  // 不打断程序运行
+}
+
 /**
  * @description 开发环境下启用热重载
  */
@@ -283,18 +293,35 @@ function setApplicationMenu(language) {
  */
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1200,
+    height: 800,
+    icon: path.join(__dirname, 'E-paper.ico'),
     webPreferences: {
-      nodeIntegration: false,
+      nodeIntegration: true,
       contextIsolation: true,
-      sandbox: false,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      enableRemoteModule: true,
+      // 允许安全访问剪贴板
+      additionalArguments: ['--enable-features=SharedArrayBuffer,enable-clipboard-read'],
+      // 确保WebSQL和LocalStorage在第一个窗口关闭后不会被清除
+      backgroundThrottling: false,
+      // 允许访问本地资源
+      webSecurity: true
     }
   });
 
   // 启用远程模块
   remote.enable(mainWindow.webContents);
+
+  // 设置内容安全策略，允许从cdnjs.cloudflare.com加载资源
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': ["default-src 'self' http://export.arxiv.org https://export.arxiv.org https://api.siliconflow.cn; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: http: https:; connect-src 'self' http://export.arxiv.org https://export.arxiv.org https://api.siliconflow.cn"]
+      }
+    });
+  });
 
   mainWindow.loadFile('index.html');
   
@@ -307,7 +334,23 @@ function createWindow() {
   globalShortcut.register('F12', () => {
     mainWindow.webContents.toggleDevTools();
   });
+
+  // 添加语音识别相关权限请求处理
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media') {
+      // 允许访问摄像头和麦克风
+      return callback(true);
+    }
+    
+    // 默认行为
+    callback(false);
+  });
 }
+
+// 应用激活事件处理（macOS特有）
+app.on('activate', function () {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
 
 app.whenReady().then(() => {
   // 获取保存的语言设置或默认使用中文
@@ -318,190 +361,37 @@ app.whenReady().then(() => {
   
   createWindow();
 
-  // 设置IPC监听器
-  ipcMain.handle('get-api-key', () => getApiKey());
-  ipcMain.handle('save-api-key', (event, apiKey) => saveApiKey(apiKey));
-  
-  // 添加获取当前语言的IPC处理程序
-  ipcMain.handle('get-language', () => currentLanguage);
-  
-  // 添加选择目录的IPC处理程序
+  // 注册IPC事件处理程序
+  ipcMain.handle('get-api-key', async () => {
+    return getApiKey();
+  });
+
+  ipcMain.handle('save-api-key', async (_, apiKey) => {
+    return saveApiKey(apiKey);
+  });
+
+  ipcMain.handle('get-language', async () => {
+    return getLanguage();
+  });
+
   ipcMain.handle('select-directory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory'],
-      title: '选择导出文件保存位置'
+      properties: ['openDirectory']
     });
-    
-    if (result.canceled) {
-      return null;
-    }
-    
-    return result.filePaths[0];
+    return result.canceled ? null : result.filePaths[0];
+  });
+
+  ipcMain.handle('dialog:showInputBox', async (_, options) => {
+    return await dialog.showMessageBox(mainWindow, options);
   });
   
-  // 添加打开外部链接的IPC处理程序
-  ipcMain.handle('open-external', async (event, url) => {
+  ipcMain.handle('open-external', async (_, url) => {
     try {
-      console.log(`正在尝试打开外部链接: ${url}`);
-      if (!url) {
-        console.error('打开外部链接失败: URL为空');
-        return false;
-      }
-      
-      // 检查URL是否有效，允许http和https链接
-      const isHttpUrl = url.startsWith('http://') || url.startsWith('https://');
-      if (!isHttpUrl) {
-        console.error(`打开外部链接失败: 不是有效的HTTP URL: ${url}`);
-        return false;
-      }
-      
-      // 尝试使用shell.openExternal打开URL
       await shell.openExternal(url);
-      console.log(`成功打开外部链接: ${url}`);
       return true;
     } catch (error) {
-      console.error(`打开外部链接失败: ${error.message}`);
-      
-      // 尝试使用备用方法
-      try {
-        console.log('尝试使用require("electron").shell打开链接...');
-        require('electron').shell.openExternal(url);
-        console.log('备用方法成功打开链接');
-        return true;
-      } catch (backupError) {
-        console.error(`备用方法也失败: ${backupError.message}`);
-        return false;
-      }
-    }
-  });
-
-  // 处理输入框对话框请求
-  ipcMain.handle('dialog:showInputBox', async (event, options) => {
-    try {
-      console.log('收到showInputBox请求，选项:', options);
-      
-      // 获取当前窗口
-      const focusedWindow = BrowserWindow.getFocusedWindow();
-
-      // 根据传入的类型选择不同的对话框
-      if (options.type === 'file-save') {
-        // 保存文件对话框
-        const saveOptions = options.options || {};
-        const result = await dialog.showSaveDialog(focusedWindow, {
-          title: saveOptions.title || '保存文件',
-          defaultPath: saveOptions.defaultPath || 'export.json',
-          buttonLabel: saveOptions.buttonLabel || '保存',
-          filters: saveOptions.filters || [
-            { name: 'JSON文件', extensions: ['json'] }
-          ],
-          properties: saveOptions.properties || []
-        });
-
-        console.log('保存文件对话框结果:', result);
-
-        if (result.canceled) {
-          return { canceled: true };
-        } else {
-          return { 
-            canceled: false, 
-            filePath: result.filePath 
-          };
-        }
-      } 
-      else if (options.type === 'file-open') {
-        // 打开文件对话框
-        const openOptions = options.options || {};
-        const result = await dialog.showOpenDialog(focusedWindow, {
-          title: openOptions.title || '打开文件',
-          defaultPath: openOptions.defaultPath || '',
-          buttonLabel: openOptions.buttonLabel || '打开',
-          filters: openOptions.filters || [
-            { name: '所有文件', extensions: ['*'] }
-          ],
-          properties: openOptions.properties || ['openFile']
-        });
-
-        console.log('打开文件对话框结果:', result);
-
-        if (result.canceled || result.filePaths.length === 0) {
-          return { canceled: true };
-        } else {
-          return { 
-            canceled: false, 
-            filePath: result.filePaths[0] 
-          };
-        }
-      }
-      else if (options.type === 'confirm') {
-        // 确认对话框
-        const confirmOptions = options.options || {};
-        const result = await dialog.showMessageBox(focusedWindow, {
-          type: confirmOptions.type || 'question',
-          buttons: confirmOptions.buttons || ['确定', '取消'],
-          defaultId: confirmOptions.defaultId || 0,
-          title: confirmOptions.title || '确认',
-          message: confirmOptions.message || '是否继续?',
-          detail: confirmOptions.detail || ''
-        });
-
-        console.log('确认对话框结果:', result);
-        return result.response; // 返回按钮索引
-      }
-      else {
-        // 默认使用保存文件对话框 (保持向后兼容)
-        // 创建包含当前日期时间的默认文件名
-        const now = new Date();
-        const dateTimeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
-        
-        // 确保文件名中含有扩展名
-        const defaultFileName = options.defaultValue ? options.defaultValue.replace('.json', '') : 'arxiv-papers';
-        const defaultPath = `${defaultFileName}_${dateTimeStr}.json`;
-        
-        console.log('使用默认文件路径:', defaultPath);
-        
-        // 使用保存文件对话框让用户输入文件名
-        console.log('显示保存文件对话框');
-        const result = await dialog.showSaveDialog(focusedWindow, {
-          title: options.title || '保存文件',
-          defaultPath: defaultPath,
-          buttonLabel: '保存',
-          filters: [
-            { name: 'JSON文件', extensions: ['json'] }
-          ]
-        });
-        
-        console.log('对话框结果:', result);
-        
-        if (result.canceled) {
-          // 用户取消了保存操作
-          console.log('用户取消了保存操作');
-          return { canceled: true, value: '' };
-        } else {
-          // 用户选择了保存位置和文件名
-          // 提取文件名（不含路径和扩展名）
-          const fullPath = result.filePath;
-          const fileName = path.basename(fullPath, '.json');
-          console.log('用户选择了保存位置:', fullPath);
-          
-          // 检查目录是否存在
-          const dirPath = path.dirname(fullPath);
-          if (!fs.existsSync(dirPath)) {
-            console.log('目录不存在，将在保存时创建:', dirPath);
-          }
-          
-          return { canceled: false, value: fileName, fullPath: fullPath };
-        }
-      }
-    } catch (error) {
-      console.error('showInputBox处理错误:', error);
-      console.error('错误堆栈:', error.stack);
-      return { canceled: true, value: '', error: error.message };
-    }
-  });
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      console.error('打开外部链接失败:', error);
+      return false;
     }
   });
 });

@@ -2,8 +2,11 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://export.arxiv.org https://export.arxiv.org https://api.siliconflow.cn; script-src 'self'; style-src 'self' 'unsafe-inline'; script-src-elem 'self';">
-    <title>Electron Paper</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://export.arxiv.org https://export.arxiv.org https://api.siliconflow.cn; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data:;">
+    <title>电子论文助手</title>
+    <!-- 添加Font Awesome图标库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
         body {
             margin: 0;
@@ -1531,6 +1534,150 @@
 
         .user-message .message-content {
             color: white;
+        }
+
+        .chat-message-container .code-block {
+            background-color: #f5f5f5;
+            padding: 8px;
+            border-radius: 4px;
+            color: #333;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+        }
+        
+        /* 搜索建议样式 */
+        .search-suggestions {
+            margin-top: 10px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .suggestions-header {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #4a4a4a;
+        }
+        
+        .suggestions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .suggestion-item {
+            background-color: #e9f7ef;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #2c7a7b;
+            border: 1px solid #c5e8e2;
+        }
+        
+        .suggestion-item:hover {
+            background-color: #d4f0ee;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+        }
+        
+        /* 语音按钮样式增强 */
+        #voiceInput {
+            background-color: #4CAF50;
+            transition: all 0.2s ease;
+            color: white;
+        }
+        
+        #voiceInput.recording {
+            background-color: #f44336;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        /* 代码块相关样式 */
+        .code-block-container {
+            margin: 12px 0;
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #f8f9fa;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .code-block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: #eaecef;
+            border-bottom: 1px solid #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .code-language {
+            font-size: 12px;
+            font-weight: 600;
+            color: #0366d6;
+        }
+        
+        .copy-code-button {
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            color: #586069;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .copy-code-button:hover {
+            background-color: #dfe2e5;
+            color: #24292e;
+        }
+        
+        pre {
+            margin: 0;
+            padding: 12px 16px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.45;
+            background-color: #f6f8fa;
+        }
+        
+        code {
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            color: #24292e;
+        }
+        
+        .inline-code {
+            background-color: #f1f1f1;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #e83e8c;
+        }
+        
+        /* 消息内容样式修改，避免空行问题 */
+        .message-content {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        .message-content > div {
+            margin-bottom: 8px;
+        }
+        
+        .message-content > div:last-child {
+            margin-bottom: 0;
         }
     </style>
 </head>

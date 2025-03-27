@@ -3475,12 +3475,197 @@ function addMessage(text, type) {
     // 创建消息内容元素
     const messageContent = document.createElement('div');
     messageContent.className = 'message-content';
-    messageContent.textContent = text;
+    
+    // 处理多行文本，避免首行空白问题
+    const trimmedText = text.trim();
+    
+    // 检测是否含有代码块
+    if (type === 'bot' && (trimmedText.includes('```') || trimmedText.includes('`'))) {
+        // 使用正则表达式解析代码块
+        const codeBlockRegex = /```([a-zA-Z]*)\n([\s\S]*?)```/g;
+        const inlineCodeRegex = /`([^`]+)`/g;
+        
+        let lastIndex = 0;
+        let match;
+        let hasCodeBlock = false;
+        
+        // 处理代码块
+        while ((match = codeBlockRegex.exec(trimmedText)) !== null) {
+            hasCodeBlock = true;
+            
+            // 添加代码块前的文本
+            if (match.index > lastIndex) {
+                const textBefore = trimmedText.substring(lastIndex, match.index);
+                const textNode = document.createElement('div');
+                textNode.textContent = textBefore;
+                messageContent.appendChild(textNode);
+            }
+            
+            // 创建代码块容器
+            const codeContainer = document.createElement('div');
+            codeContainer.className = 'code-block-container';
+            
+            // 创建代码块头部
+            const codeHeader = document.createElement('div');
+            codeHeader.className = 'code-block-header';
+            
+            // 语言标识
+            const languageSpan = document.createElement('span');
+            languageSpan.className = 'code-language';
+            const language = match[1].trim() || '代码';
+            languageSpan.textContent = language;
+            codeHeader.appendChild(languageSpan);
+            
+            // 复制按钮
+            const copyButton = document.createElement('button');
+            copyButton.className = 'copy-code-button';
+            copyButton.innerHTML = '<i class="fas fa-copy"></i> 复制';
+            // 将代码文本存储为变量，避免在回调函数中引用match[2]
+            const codeTextToCopy = match[2];
+            copyButton.onclick = function() {
+                // 使用Electron的IPC机制来复制文本
+                if (window.electronAPI && window.electronAPI.copyToClipboard) {
+                    window.electronAPI.copyToClipboard(codeTextToCopy)
+                        .then(() => {
+                            copyButton.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                            setTimeout(() => {
+                                copyButton.innerHTML = '<i class="fas fa-copy"></i> 复制';
+                            }, 2000);
+                        })
+                        .catch(err => {
+                            console.error('复制失败:', err);
+                            copyButton.innerHTML = '<i class="fas fa-times"></i> 复制失败';
+                            setTimeout(() => {
+                                copyButton.innerHTML = '<i class="fas fa-copy"></i> 复制';
+                            }, 2000);
+                        });
+                } else {
+                    // 回退方案：尝试使用document.execCommand
+                    try {
+                        const textArea = document.createElement('textarea');
+                        textArea.value = codeTextToCopy;
+                        textArea.style.position = 'fixed';
+                        textArea.style.left = '-9999px';
+                        textArea.style.top = '-9999px';
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        const successful = document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        
+                        if (successful) {
+                            copyButton.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                        } else {
+                            copyButton.innerHTML = '<i class="fas fa-times"></i> 复制失败';
+                        }
+                        setTimeout(() => {
+                            copyButton.innerHTML = '<i class="fas fa-copy"></i> 复制';
+                        }, 2000);
+                    } catch (err) {
+                        console.error('复制失败:', err);
+                        copyButton.innerHTML = '<i class="fas fa-times"></i> 复制失败';
+                        setTimeout(() => {
+                            copyButton.innerHTML = '<i class="fas fa-copy"></i> 复制';
+                        }, 2000);
+                    }
+                }
+            };
+            codeHeader.appendChild(copyButton);
+            
+            // 添加头部到容器
+            codeContainer.appendChild(codeHeader);
+            
+            // 创建代码块
+            const codeBlock = document.createElement('pre');
+            const code = document.createElement('code');
+            if (language && language !== '代码') {
+                code.className = `language-${language}`;
+            }
+            code.textContent = match[2];
+            codeBlock.appendChild(code);
+            codeContainer.appendChild(codeBlock);
+            
+            // 添加代码块到消息
+            messageContent.appendChild(codeContainer);
+            
+            lastIndex = match.index + match[0].length;
+        }
+        
+        // 添加剩余文本
+        if (lastIndex < trimmedText.length) {
+            const remainingText = trimmedText.substring(lastIndex);
+            const textNode = document.createElement('div');
+            
+            // 处理内联代码
+            if (inlineCodeRegex.test(remainingText)) {
+                let inlineLastIndex = 0;
+                let inlineMatch;
+                let textContent = '';
+                
+                inlineCodeRegex.lastIndex = 0; // 重置正则表达式的lastIndex
+                while ((inlineMatch = inlineCodeRegex.exec(remainingText)) !== null) {
+                    // 添加内联代码前的文本
+                    if (inlineMatch.index > inlineLastIndex) {
+                        textContent += remainingText.substring(inlineLastIndex, inlineMatch.index);
+                    }
+                    
+                    // 添加内联代码
+                    textContent += `<span class="inline-code">${inlineMatch[1]}</span>`;
+                    
+                    inlineLastIndex = inlineMatch.index + inlineMatch[0].length;
+                }
+                
+                // 添加剩余文本
+                if (inlineLastIndex < remainingText.length) {
+                    textContent += remainingText.substring(inlineLastIndex);
+                }
+                
+                textNode.innerHTML = textContent;
+            } else {
+                textNode.textContent = remainingText;
+            }
+            
+            messageContent.appendChild(textNode);
+        }
+        
+        // 如果没有找到代码块，但有内联代码，处理内联代码
+        if (!hasCodeBlock && inlineCodeRegex.test(trimmedText)) {
+            let inlineLastIndex = 0;
+            let inlineMatch;
+            let textContent = '';
+            
+            inlineCodeRegex.lastIndex = 0; // 重置正则表达式的lastIndex
+            while ((inlineMatch = inlineCodeRegex.exec(trimmedText)) !== null) {
+                // 添加内联代码前的文本
+                if (inlineMatch.index > inlineLastIndex) {
+                    textContent += trimmedText.substring(inlineLastIndex, inlineMatch.index);
+                }
+                
+                // 添加内联代码
+                textContent += `<span class="inline-code">${inlineMatch[1]}</span>`;
+                
+                inlineLastIndex = inlineMatch.index + inlineMatch[0].length;
+            }
+            
+            // 添加剩余文本
+            if (inlineLastIndex < trimmedText.length) {
+                textContent += trimmedText.substring(inlineLastIndex);
+            }
+            
+            messageContent.innerHTML = textContent;
+        }
+    } else {
+        // 普通文本，直接设置内容
+        messageContent.textContent = trimmedText;
+    }
+    
     messageContainer.appendChild(messageContent);
     
     // 如果是机器人消息，检查是否包含搜索建议
-    if (type === 'bot' && text.includes('搜索建议：')) {
-        const [message, suggestions] = text.split('搜索建议：');
+    if (type === 'bot' && trimmedText.includes('搜索建议：')) {
+        const [message, suggestions] = trimmedText.split('搜索建议：');
+        
+        // 清空之前的内容，重新设置不含搜索建议的部分
         messageContent.textContent = message;
         
         if (suggestions) {
@@ -3506,6 +3691,9 @@ function addMessage(text, type) {
     
     chatMessages.appendChild(messageContainer);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    // 返回消息容器元素，以便后续能够引用和删除
+    return messageContainer;
 }
 
 // 发送消息
@@ -3516,11 +3704,16 @@ async function sendMessage() {
     // 添加用户消息
     addMessage(message, 'user');
     chatInput.value = '';
+    chatInput.style.height = 'auto'; // 重置输入框高度
     
     try {
         // 获取API密钥和模型设置
-        const apiKey = localStorage.getItem('siliconflow_api_key');
-        const model = localStorage.getItem('selected_model') || 'THUDM/glm-4-9b-chat';
+        if (!apiKey) {
+            apiKey = await loadApiKey();
+        }
+        
+        // 获取当前选择的翻译模型作为聊天模型
+        const model = settingsModelSelection.value || 'deepseek-ai/DeepSeek-V2';
         
         if (!apiKey) {
             addMessage('请先在设置中配置SiliconFlow API密钥。', 'bot');
@@ -3528,21 +3721,55 @@ async function sendMessage() {
         }
         
         // 显示正在输入状态
-        addMessage('正在思考...', 'bot');
+        const loadingMessage = addMessage('正在思考...', 'bot');
         
         // 调用AI助手
         const response = await window.electronAPI.chatWithAI(message, apiKey, model);
         
-        // 移除"正在思考"消息
-        chatMessages.removeChild(chatMessages.lastChild);
+        // 移除"正在思考"消息（添加检查）
+        if (loadingMessage && loadingMessage.parentNode === chatMessages) {
+            chatMessages.removeChild(loadingMessage);
+        }
         
         // 添加AI回复
         addMessage(response.reply, 'bot');
         
         // 如果有搜索建议，添加到回复中
         if (response.searchSuggestions && response.searchSuggestions.length > 0) {
-            const suggestionsText = '搜索建议：\n' + response.searchSuggestions.join('\n');
-            addMessage(suggestionsText, 'bot');
+            // 在这里处理搜索建议，将其添加到消息中
+            const suggestionsContainer = document.createElement('div');
+            suggestionsContainer.className = 'search-suggestions';
+            
+            const suggestionsHeader = document.createElement('div');
+            suggestionsHeader.className = 'suggestions-header';
+            suggestionsHeader.textContent = '论文搜索建议:';
+            suggestionsContainer.appendChild(suggestionsHeader);
+            
+            const suggestionsList = document.createElement('div');
+            suggestionsList.className = 'suggestions-list';
+            
+            response.searchSuggestions.forEach(suggestion => {
+                const suggestionItem = document.createElement('div');
+                suggestionItem.className = 'suggestion-item';
+                suggestionItem.textContent = suggestion;
+                
+                // 添加点击事件，应用搜索建议
+                suggestionItem.addEventListener('click', () => {
+                    applySuggestion(suggestion);
+                });
+                
+                suggestionsList.appendChild(suggestionItem);
+            });
+            
+            suggestionsContainer.appendChild(suggestionsList);
+            
+            // 创建一个包含建议的消息
+            const messageContainer = document.createElement('div');
+            messageContainer.className = 'message bot-message';
+            messageContainer.appendChild(suggestionsContainer);
+            
+            chatMessages.appendChild(messageContainer);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
     } catch (error) {
         console.error('发送消息失败:', error);
@@ -3550,41 +3777,220 @@ async function sendMessage() {
     }
 }
 
-// 语音输入相关
-async function startRecording() {
+// 应用搜索建议到搜索表单
+function applySuggestion(suggestion) {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-        
-        mediaRecorder.ondataavailable = (event) => {
-            audioChunks.push(event.data);
-        };
-        
-        mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            // 这里需要实现语音转文字的逻辑
-            // 暂时直接提示功能未实现
-            addMessage('语音转文字功能正在开发中...', 'bot');
-        };
-        
-        mediaRecorder.start();
-        isRecording = true;
-        voiceButton.textContent = '松开结束';
-        voiceButton.classList.add('recording');
+        // 获取搜索表单的第一个搜索条件
+        const firstSearchField = document.querySelector('.search-field');
+        if (firstSearchField) {
+            const termInput = firstSearchField.querySelector('.search-term');
+            if (termInput) {
+                termInput.value = suggestion;
+                
+                // 切换到搜索页面并触发搜索
+                const mainSearchContainer = document.getElementById('mainSearchContainer');
+                const tabLinks = document.querySelectorAll('.tab-link');
+                
+                // 切换到搜索标签
+                tabLinks.forEach(link => {
+                    if (link.getAttribute('data-tab') === 'search') {
+                        link.click();
+                    }
+                });
+                
+                // 滚动到搜索表单
+                if (mainSearchContainer) {
+                    mainSearchContainer.scrollIntoView({ behavior: 'smooth' });
+                    
+                    // 等待一下再触发搜索，确保UI已更新
+                    setTimeout(() => {
+                        // 触发搜索按钮点击
+                        const searchButton = document.getElementById('searchButton');
+                        if (searchButton) {
+                            searchButton.click();
+                        }
+                    }, 500);
+                }
+            }
+        }
     } catch (error) {
-        console.error('开启录音失败:', error);
-        addMessage('无法开启录音功能，请检查麦克风权限。', 'bot');
+        console.error('应用搜索建议失败:', error);
     }
 }
 
-function stopRecording() {
-    if (mediaRecorder && isRecording) {
-        mediaRecorder.stop();
+// 语音输入相关
+async function startRecording() {
+    try {
+        // 如果有已存在的录音，先停止
+        if (window.mediaRecorder && window.mediaRecorder.state === 'recording') {
+            window.mediaRecorder.stop();
+        }
+
+        // 请求麦克风权限
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            } 
+        });
+
+        // 创建MediaRecorder实例
+        window.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        window.audioChunks = [];
+        
+        // 添加正在识别的提示
+        const loadingMessage = addMessage('正在聆听...', 'user');
+        
+        // 状态变化
+        isRecording = true;
+        voiceButton.textContent = '松开结束';
+        voiceButton.classList.add('recording');
+        
+        // 收集音频数据
+        window.mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                window.audioChunks.push(event.data);
+            }
+        };
+
+        // 录音结束处理
+        window.mediaRecorder.onstop = async () => {
+            try {
+                // 麦克风数据收集完成，创建音频Blob
+                const audioBlob = new Blob(window.audioChunks, { type: 'audio/webm' });
+                
+                // 尝试使用浏览器内置的语音识别功能
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    try {
+                        // 移除"正在聆听"消息
+                        if (loadingMessage && loadingMessage.parentNode === chatMessages) {
+                            chatMessages.removeChild(loadingMessage);
+                        }
+                        
+                        // 使用内置的语音识别
+                        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                        const recognition = new SpeechRecognition();
+                        recognition.lang = 'zh-CN';
+                        recognition.interimResults = false;
+                        recognition.maxAlternatives = 1;
+                        
+                        // 创建一个Promise包装recognition
+                        const recognitionResult = await new Promise((resolve, reject) => {
+                            // 设置20秒超时
+                            const timeout = setTimeout(() => {
+                                try {
+                                    recognition.abort();
+                                } catch (e) {}
+                                reject(new Error('语音识别超时'));
+                            }, 20000);
+                            
+                            recognition.onresult = (event) => {
+                                clearTimeout(timeout);
+                                const transcript = event.results[0][0].transcript;
+                                resolve(transcript);
+                            };
+                            
+                            recognition.onerror = (event) => {
+                                clearTimeout(timeout);
+                                reject(new Error(event.error || '语音识别失败'));
+                            };
+                            
+                            recognition.start();
+                        });
+                        
+                        // 识别成功，在输入框中显示
+                        chatInput.value = recognitionResult;
+                        
+                        // 自动发送消息
+                        sendMessage();
+                    } catch (recognitionError) {
+                        console.error('浏览器语音识别失败，尝试使用第二方案', recognitionError);
+                        
+                        // 切换到备用方案 - 使用本地音频文件转文本
+                        const messageContainer = addMessage('使用备用语音识别方式...', 'bot');
+                        
+                        try {
+                            // 将录音转为本地URL和数据URL
+                            const audioUrl = URL.createObjectURL(audioBlob);
+                            
+                            // 播放音频以确认录音成功
+                            const audio = new Audio(audioUrl);
+                            audio.play();
+                            
+                            // 创建一个新的添加消息，包含录音控件
+                            const audioElement = document.createElement('audio');
+                            audioElement.controls = true;
+                            audioElement.src = audioUrl;
+                            
+                            const msgDiv = document.createElement('div');
+                            msgDiv.innerHTML = '您的语音已录制，请直接输入文字：';
+                            msgDiv.appendChild(audioElement);
+                            
+                            // 添加到消息区域
+                            messageContainer.appendChild(msgDiv);
+                        } catch (error) {
+                            console.error('无法处理录音:', error);
+                            addMessage('语音识别失败，请直接输入文字: ' + error.message, 'bot');
+                        }
+                    }
+                } else {
+                    // 浏览器不支持语音识别
+                    addMessage('您的浏览器不支持语音识别，请直接输入文字。', 'bot');
+                }
+            } catch (error) {
+                console.error('语音识别处理错误:', error);
+                addMessage('语音识别出错，请直接输入文字: ' + error.message, 'bot');
+            } finally {
+                // 关闭麦克风流
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // 重置录音状态
+                isRecording = false;
+                voiceButton.textContent = '按住说话';
+                voiceButton.classList.remove('recording');
+                
+                // 移除loading消息（如果还存在）
+                if (loadingMessage && loadingMessage.parentNode === chatMessages) {
+                    try {
+                        chatMessages.removeChild(loadingMessage);
+                    } catch (e) {}
+                }
+            }
+        };
+        
+        // 开始录音
+        window.mediaRecorder.start();
+        
+    } catch (error) {
+        console.error('开启录音失败:', error);
+        addMessage('无法开启录音功能，请检查麦克风权限: ' + error.message, 'bot');
+        
+        // 重置按钮状态
         isRecording = false;
         voiceButton.textContent = '按住说话';
         voiceButton.classList.remove('recording');
     }
+}
+
+function stopRecording() {
+    console.log('停止录音');
+    
+    // 停止录音
+    if (window.mediaRecorder && window.mediaRecorder.state === 'recording') {
+        try {
+            window.mediaRecorder.stop();
+        } catch (error) {
+            console.error('停止录音时出错:', error);
+        }
+    }
+    
+    // 重置按钮状态
+    isRecording = false;
+    voiceButton.textContent = '按住说话';
+    voiceButton.classList.remove('recording');
 }
 
 // 绑定事件监听
@@ -3676,9 +4082,8 @@ function initChatFeatures() {
             sendMessage();
         }
     });
-}
-
-// 在DOM加载完成后初始化聊天功能
+}// 在DOM加载完成后初始化聊天功能
 document.addEventListener('DOMContentLoaded', () => {
     initChatFeatures();
 });
+
