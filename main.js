@@ -306,7 +306,22 @@ function createWindow() {
       // 确保WebSQL和LocalStorage在第一个窗口关闭后不会被清除
       backgroundThrottling: false,
       // 允许访问本地资源
-      webSecurity: true
+      webSecurity: true,
+      // 设置CSP (Content Security Policy)
+      contentSecurityPolicy: {
+        'default-src': ["'self'", 'https://fonts.googleapis.com'],
+        'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
+        'font-src': ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
+        'img-src': ["'self'", 'data:', 'blob:'],
+        'media-src': ["'self'", 'data:', 'blob:'],
+        'connect-src': [
+          "'self'", 
+          'https://api.siliconflow.cn',
+          'https://fonts.googleapis.com',
+          'http://export.arxiv.org'
+        ],
+      }
     }
   });
 
@@ -333,17 +348,6 @@ function createWindow() {
   // 注册 F12 快捷键
   globalShortcut.register('F12', () => {
     mainWindow.webContents.toggleDevTools();
-  });
-
-  // 添加语音识别相关权限请求处理
-  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
-    if (permission === 'media') {
-      // 允许访问摄像头和麦克风
-      return callback(true);
-    }
-    
-    // 默认行为
-    callback(false);
   });
 }
 

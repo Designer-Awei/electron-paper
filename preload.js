@@ -489,236 +489,8 @@ function readFile(filePath) {
     }
 }
 
-/**
- * @description 分析用户问题是否需要联网搜索
- * @param {string} question - 用户问题
- * @returns {boolean} 是否需要联网
- */
-function needsWebSearch(question) {
-    const webSearchKeywords = [
-        '最新', '最近', '新闻', '进展', '发展', '趋势', '现状',
-        '比较', '区别', '优缺点', '评测', '评价', '如何选择',
-        '市场', '价格', '排名', '推荐', '热门', '怎么样', 
-        '联网', '搜索', '查询', '查找', '寻找'
-    ];
-    
-    return webSearchKeywords.some(keyword => question.includes(keyword));
-}
-
-/**
- * @description 进行网络搜索
- * @param {string} query - 搜索查询
- * @returns {Promise<string>} 搜索结果
- */
-async function webSearch(query) {
-    try {
-        console.log('执行网络搜索:', query);
-        
-        // 首先尝试使用必应搜索API
-        try {
-            const response = await axios.get(`https://api.bing.microsoft.com/v7.0/search?q=${encodeURIComponent(query)}`, {
-                headers: {
-                    'Ocp-Apim-Subscription-Key': process.env.BING_API_KEY || 'YOUR_BING_API_KEY'
-                }
-            });
-            
-            // 如果没有结果，返回提示信息
-            if (!response.data.webPages || !response.data.webPages.value || response.data.webPages.value.length === 0) {
-                return '未找到相关搜索结果';
-            }
-            
-            // 提取搜索结果
-            const results = response.data.webPages.value.slice(0, 5).map(result => {
-                return `标题: ${result.name}\n摘要: ${result.snippet}\n链接: ${result.url}\n`;
-            });
-            
-            return results.join('\n');
-        } catch (bingError) {
-            console.error('必应搜索API失败:', bingError);
-            // 继续尝试其他方法
-        }
-        
-        // 备选方案1: 使用维基百科API
-        try {
-            const wikiResponse = await axios.get(`https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`, {
-                headers: {
-                    'User-Agent': 'ElectronPaperApp/1.0.0'
-                }
-            });
-            
-            if (wikiResponse.data && wikiResponse.data.query && wikiResponse.data.query.search && wikiResponse.data.query.search.length > 0) {
-                const wikiResults = wikiResponse.data.query.search.slice(0, 3).map(result => {
-                    // 移除HTML标签
-                    const snippet = result.snippet.replace(/<\/?[^>]+(>|$)/g, "");
-                    return `标题: ${result.title}\n摘要: ${snippet}\n链接: https://zh.wikipedia.org/wiki/${encodeURIComponent(result.title)}\n`;
-                });
-                
-                return `维基百科搜索结果:\n\n${wikiResults.join('\n')}`;
-            }
-        } catch (wikiError) {
-            console.error('维基百科API失败:', wikiError);
-        }
-        
-        // 备选方案2: 使用自定义搜索服务 (例如谷歌自定义搜索)
-        try {
-            const googleResponse = await axios.get(`https://customsearch.googleapis.com/customsearch/v1?key=${process.env.GOOGLE_API_KEY || 'YOUR_GOOGLE_API_KEY'}&cx=${process.env.GOOGLE_CX || 'YOUR_GOOGLE_CX'}&q=${encodeURIComponent(query)}`, {
-                headers: {
-                    'User-Agent': 'ElectronPaperApp/1.0.0'
-                }
-            });
-            
-            if (googleResponse.data && googleResponse.data.items && googleResponse.data.items.length > 0) {
-                const googleResults = googleResponse.data.items.slice(0, 3).map(item => {
-                    return `标题: ${item.title}\n摘要: ${item.snippet}\n链接: ${item.link}\n`;
-                });
-                
-                return `搜索结果:\n\n${googleResults.join('\n')}`;
-            }
-        } catch (googleError) {
-            console.error('谷歌自定义搜索API失败:', googleError);
-        }
-        
-        // 备选方案3: 直接获取特定网站内容 (无需浏览器)
-        try {
-            // 获取知乎搜索页面
-            const zhihuResponse = await axios.get(`https://www.zhihu.com/api/v4/search_v3?t=general&q=${encodeURIComponent(query)}&correction=1&offset=0&limit=5&lc_idx=0&show_all_topics=0`, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
-            });
-            
-            if (zhihuResponse.data && zhihuResponse.data.data && zhihuResponse.data.data.length > 0) {
-                const zhihuResults = zhihuResponse.data.data.slice(0, 3).map(item => {
-                    const title = item.highlight?.title || item.object?.title || '无标题';
-                    const excerpt = item.highlight?.description || item.object?.excerpt || '无摘要';
-                    const url = item.object?.url || `https://www.zhihu.com/question/${item.object?.id}`;
-                    
-                    return `标题: ${title}\n摘要: ${excerpt}\n链接: ${url}\n`;
-                });
-                
-                return `知乎相关内容:\n\n${zhihuResults.join('\n')}`;
-            }
-        } catch (zhihuError) {
-            console.error('知乎API调用失败:', zhihuError);
-        }
-        
-        // 最终备选: 仅提供一个简单的搜索建议
-        return `无法获取在线搜索结果，建议您使用以下关键词手动搜索:\n\n1. ${query}\n2. ${query} 资料\n3. ${query} 最新信息`;
-        
-    } catch (error) {
-        console.error('网络搜索综合失败:', error);
-        return '搜索过程中出现错误，请稍后再试。';
-    }
-}
-
-/**
- * @description 使用puppeteer爬取网页内容 (仅在必要时使用)
- * @param {string} url - 要爬取的网页URL
- * @returns {Promise<string>} 返回网页内容
- */
-async function crawlWebContent(url) {
-    try {
-        // 首先尝试直接用axios获取内容 (无需浏览器)
-        try {
-            const response = await axios.get(url, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                },
-                timeout: 10000
-            });
-            
-            // 如果能直接获取HTML，解析简单内容
-            if (response.data && typeof response.data === 'string') {
-                const text = response.data
-                    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-                    .replace(/<[^>]+>/g, ' ')
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                
-                // 提取有用的部分 (前2000字符已足够)
-                return text.substring(0, 2000);
-            }
-        } catch (axiosError) {
-            console.warn('无法直接获取网页内容，尝试使用浏览器:', axiosError.message);
-        }
-        
-        // 只有在绝对必要时才使用puppeteer
-        const puppeteer = require('puppeteer-core');
-        
-        // 尝试使用本地已安装的Chrome
-        const browserPaths = {
-            win32: [
-                'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-                'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-                `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
-                `${process.env.ProgramFiles}\\Microsoft\\Edge\\Application\\msedge.exe`,
-                `${process.env.LOCALAPPDATA}\\Microsoft\\Edge\\Application\\msedge.exe`
-            ]
-        };
-        
-        const possiblePaths = browserPaths[process.platform] || [];
-        let executablePath = null;
-        
-        for (const path of possiblePaths) {
-            if (fs.existsSync(path)) {
-                executablePath = path;
-                break;
-            }
-        }
-        
-        if (!executablePath) {
-            console.error('无法找到本地安装的Chrome或Edge浏览器');
-            return '无法访问网页内容，请确保你的系统安装了Chrome或Edge浏览器';
-        }
-        
-        // 启动浏览器
-        const browser = await puppeteer.launch({
-            headless: true,
-            executablePath,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        
-        // 创建新页面
-        const page = await browser.newPage();
-        
-        // 设置用户代理
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-        
-        // 访问URL
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 });
-        
-        // 提取页面内容
-        const content = await page.evaluate(() => {
-            // 获取搜索结果列表（针对Bing搜索结果的选择器，可能需要根据实际网页结构调整）
-            const results = Array.from(document.querySelectorAll('.b_algo, .g'));
-            
-            if (results.length > 0) {
-                // 提取每个结果的标题、摘要和链接
-                return results.slice(0, 5).map(result => {
-                    const titleElement = result.querySelector('h2 a, h3 a');
-                    const title = titleElement ? titleElement.textContent.trim() : '';
-                    const url = titleElement ? titleElement.getAttribute('href') : '';
-                    const snippet = result.querySelector('.b_caption p, .VwiC3b') ? 
-                        result.querySelector('.b_caption p, .VwiC3b').textContent.trim() : '';
-                    
-                    return `标题: ${title}\n摘要: ${snippet}\n链接: ${url}\n`;
-                }).join('\n');
-            } else {
-                // 如果找不到搜索结果，获取页面全部文本
-                return document.body.innerText.substring(0, 2000);
-            }
-        });
-        
-        // 关闭浏览器
-        await browser.close();
-        
-        return content || '未找到相关搜索结果';
-    } catch (error) {
-        console.error('网页爬取失败:', error);
-        return '无法获取网页内容，请确保已安装Chrome或Edge浏览器';
-    }
-}
+// 添加会话历史存储
+let chatHistory = [];
 
 /**
  * @description 调用SiliconFlow API进行对话
@@ -729,44 +501,41 @@ async function crawlWebContent(url) {
  */
 async function chatWithSiliconFlow(message, apiKey, model) {
     try {
-        // 判断是否需要联网搜索
-        const requiresWebSearch = needsWebSearch(message);
-        let systemPrompt = `你是一位资深学术导师，专门帮助研究人员进行文献检索和学术研究。你的回答应该专业、准确，并且富有洞察力。
-请注意以下要求：
-1. 如果用户询问有关论文检索或关键词的问题，请提供3个具体的搜索建议，格式为：【搜索建议1】、【搜索建议2】、【搜索建议3】
-2. 回答要简洁明了，避免冗长
-3. 如果需要列出步骤或方法，请使用序号标注`;
-        
-        let userMessage = message;
-        
-        // 如果需要联网搜索，添加网络搜索结果
-        if (requiresWebSearch) {
-            console.log('检测到需要联网搜索的问题');
-            try {
-                const webResults = await webSearch(message);
-                systemPrompt += `\n此外，用户的问题需要最新信息，我提供了以下搜索结果供你参考。请基于这些结果给出准确的回答。`;
-                userMessage = `${message}\n\n以下是相关的网络搜索结果：\n${webResults}`;
-            } catch (searchError) {
-                console.error('联网搜索失败:', searchError);
-                // 如果搜索失败，仍然继续处理，但不添加搜索结果
-            }
-        }
-        
+        // 系统提示词，明确指导AI在回复中提供应用内检索建议
+        let systemPrompt = `你是一位资深学术导师Awei，专门帮助研究人员梳理研究思路并使用本应用内的论文检索功能。
+请严格按照以下格式回复用户:
+
+1. 首先，提供专业、准确、简洁的学术分析，基于你的专业知识回答用户的问题
+2. 然后，在回复的末尾提供2-3个适合在本应用内搜索的关键词，使用【关键词】格式标注，例如【机器学习】【深度学习】
+3. 不要建议用户访问外部数据库（如Google Scholar、IEEE Xplore等），因为用户当前已在使用的就是本应用的论文检索系统
+4. 你的关键词建议会自动转化为应用内的"快捷检索选项"，用户点击后会直接在应用内搜索
+
+记住，用户只需要在本应用内进行检索，不需要去外部网站。每次回复都必须包含用【】格式标注的关键词建议。`;
+
         console.log('调用SiliconFlow API...');
+        
+        // 构建messages数组，包含历史对话
+        const messages = [
+            {
+                role: "system",
+                content: systemPrompt
+            }
+        ];
+        
+        // 添加历史对话记录，保留最近的10轮对话
+        const recentHistory = chatHistory.slice(-10);
+        messages.push(...recentHistory);
+        
+        // 添加当前用户消息
+        messages.push({
+            role: "user",
+            content: message
+        });
         
         // 使用SiliconFlow API 进行对话
         const response = await axios.post('https://api.siliconflow.cn/v1/chat/completions', {
             model: model,
-            messages: [
-                {
-                    role: "system",
-                    content: systemPrompt
-                },
-                {
-                    role: "user",
-                    content: userMessage
-                }
-            ],
+            messages: messages,
             temperature: 0.7,
             max_tokens: 2000
         }, {
@@ -779,51 +548,24 @@ async function chatWithSiliconFlow(message, apiKey, model) {
         const aiReply = response.data.choices[0].message.content;
         console.log('AI回复:', aiReply);
         
-        // 处理搜索建议
-        let searchSuggestions = [];
-        if (message.includes('论文') || message.includes('检索') || message.includes('关键词') || message.includes('搜索')) {
-            // 从回复中提取搜索建议
-            const suggestionRegex = /【(.+?)】/g;
-            let match;
-            while ((match = suggestionRegex.exec(aiReply)) !== null) {
-                searchSuggestions.push(match[1]);
-            }
-            
-            // 如果没有找到搜索建议但是应该有，则尝试生成
-            if (searchSuggestions.length === 0) {
-                // 再次请求API生成搜索建议
-                try {
-                    const suggestResponse = await axios.post('https://api.siliconflow.cn/v1/chat/completions', {
-                        model: model,
-                        messages: [
-                            {
-                                role: "system",
-                                content: "你是一位学术助手，请针对用户的问题提供3个简洁的论文搜索关键词组合，格式为【关键词1】【关键词2】【关键词3】，不要有其他格式和解释"
-                            },
-                            {
-                                role: "user",
-                                content: message
-                            }
-                        ],
-                        temperature: 0.7,
-                        max_tokens: 100
-                    }, {
-                        headers: {
-                            'Authorization': `Bearer ${apiKey}`,
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                    
-                    const suggestText = suggestResponse.data.choices[0].message.content;
-                    const extraSuggestions = suggestText.match(/【(.+?)】/g);
-                    if (extraSuggestions) {
-                        searchSuggestions = extraSuggestions.map(s => s.replace(/【|】/g, ''));
-                    }
-                } catch (suggestError) {
-                    console.error('获取额外搜索建议失败:', suggestError);
-                }
-            }
+        // 将当前对话添加到历史记录
+        chatHistory.push({
+            role: "user",
+            content: message
+        });
+        
+        chatHistory.push({
+            role: "assistant",
+            content: aiReply
+        });
+        
+        // 限制历史记录长度，最多保存10轮对话(20条消息)
+        if (chatHistory.length > 20) {
+            chatHistory = chatHistory.slice(-20);
         }
+        
+        // 提取搜索建议
+        const searchSuggestions = extractSearchSuggestions(aiReply, message);
         
         return {
             reply: aiReply,
@@ -832,6 +574,136 @@ async function chatWithSiliconFlow(message, apiKey, model) {
     } catch (error) {
         console.error('调用SiliconFlow API失败:', error);
         throw new Error(`与AI助手通信失败: ${error.message}`);
+    }
+}
+
+/**
+ * @description 从AI回复中提取搜索建议
+ * @param {string} reply - AI的回复
+ * @param {string} userMessage - 用户的原始消息
+ * @returns {Array} 搜索建议数组
+ */
+function extractSearchSuggestions(reply, userMessage) {
+    console.log('开始提取搜索建议，原始回复长度:', reply.length);
+    
+    // 如果用户消息与论文、检索或关键词相关，尝试提取搜索建议
+    const academicKeywords = ['论文', '检索', '关键词', '搜索', '文献', '研究', '学术', '查找', 
+                             '期刊', '数据库', '引用', 'paper', 'research', 'keyword'];
+                             
+    // 检查用户消息是否包含学术关键词
+    const isAcademicQuery = academicKeywords.some(keyword => 
+        userMessage.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    if (isAcademicQuery) {
+        console.log('检测到学术相关查询，开始提取搜索建议');
+        let suggestions = [];
+        
+        // 1. 首先尝试提取【】格式的建议（优先级最高）
+        const bracketSuggestionRegex = /【(.+?)】/g;
+        let match;
+        while ((match = bracketSuggestionRegex.exec(reply)) !== null) {
+            if (match[1] && match[1].trim()) {
+                suggestions.push(match[1].trim());
+                console.log('从【】格式提取到关键词:', match[1].trim());
+            }
+        }
+        
+        // 2. 如果没有找到【】格式的建议，尝试其他常见格式
+        if (suggestions.length === 0) {
+            console.log('未找到【】格式的建议，尝试其他格式');
+            
+            // 2.1 尝试提取"论文搜索建议/关键词建议:"后的内容
+            const suggestionLabels = [
+                '论文搜索建议', '搜索建议', '建议关键词', '推荐关键词', 
+                '检索建议', '关键词推荐', '搜索关键词', '搜索词建议'
+            ];
+            
+            // 构建包含所有可能标签的正则表达式
+            const labelPattern = suggestionLabels.join('|');
+            const suggestionSectionRegex = new RegExp(`(?:${labelPattern})[：:](.*?)(?=\\n\\n|$)`, 'gs');
+            
+            while ((match = suggestionSectionRegex.exec(reply)) !== null) {
+                // 从这个部分提取关键词
+                const keywordSection = match[1].trim();
+                console.log('找到建议部分:', keywordSection);
+                
+                // 按常见分隔符分割
+                const keywordList = keywordSection.split(/[,，、；;]/);
+                suggestions.push(...keywordList.map(k => k.trim()).filter(k => k.length > 0));
+            }
+            
+            // 2.2 尝试提取引号内的建议，如："xxx"
+            if (suggestions.length === 0) {
+                const quoteSuggestionRegex = /"([^"]+?)"/g;
+                while ((match = quoteSuggestionRegex.exec(reply)) !== null) {
+                    // 确保这看起来像搜索关键词而不是引用 (排除太长的字符串或包含句号的字符串)
+                    if (match[1].length < 50 && !match[1].includes('。')) {
+                        suggestions.push(match[1].trim());
+                        console.log('从引号中提取到关键词:', match[1].trim());
+                    }
+                }
+            }
+            
+            // 2.3 尝试提取包含"关键词"、"搜索词"后面的短语
+            if (suggestions.length === 0) {
+                const keywordRegex = /(?:关键词|搜索词|检索词|推荐词)[：:]\s*(.+?)(?=\n|$)/g;
+                while ((match = keywordRegex.exec(reply)) !== null) {
+                    const keywordList = match[1].split(/[,，、；;]/);
+                    const keywords = keywordList.map(k => k.trim()).filter(k => k.length > 0 && k.length < 50);
+                    suggestions.push(...keywords);
+                    console.log('从关键词标记后提取到关键词:', keywords.join(', '));
+                }
+            }
+        }
+        
+        // 如果上面的方法都没提取到，尝试直接从最后一段提取
+        if (suggestions.length === 0) {
+            const paragraphs = reply.split('\n\n');
+            if (paragraphs.length > 0) {
+                const lastParagraph = paragraphs[paragraphs.length - 1].trim();
+                // 检查最后一段是否短并且不包含太多标点符号
+                if (lastParagraph.length < 100 && 
+                    (lastParagraph.match(/[,.;。，、；]/g) || []).length < 5) {
+                    // 可能是关键词列表，按分隔符拆分
+                    const possibleKeywords = lastParagraph.split(/[,，、；;]/);
+                    const keywords = possibleKeywords.map(k => k.trim())
+                                      .filter(k => k.length > 0 && k.length < 30);
+                    
+                    if (keywords.length > 0 && keywords.length <= 5) {
+                        suggestions.push(...keywords);
+                        console.log('从最后一段提取到可能的关键词:', keywords.join(', '));
+                    }
+                }
+            }
+        }
+        
+        // 去重并限制结果数量
+        const uniqueSuggestions = [...new Set(suggestions)];
+        const finalSuggestions = uniqueSuggestions
+            .filter(s => s.length > 0 && s.length < 50) // 过滤掉太长或空的建议
+            .slice(0, 3); // 最多返回3个建议
+            
+        console.log('最终提取的搜索建议:', finalSuggestions);
+        return finalSuggestions;
+    }
+    
+    console.log('非学术相关查询，不提取搜索建议');
+    return [];
+}
+
+/**
+ * @description 清除聊天历史记录
+ * @returns {boolean} 操作是否成功
+ */
+function clearChatHistory() {
+    try {
+        chatHistory = [];
+        console.log('聊天历史已清除');
+        return true;
+    } catch (error) {
+        console.error('清除聊天历史失败:', error);
+        return false;
     }
 }
 
@@ -894,6 +766,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
             throw error;
         }
     },
+    
+    // 清除聊天历史
+    clearChatHistory: () => clearChatHistory(),
     
     // 添加剪贴板操作函数
     copyToClipboard: async (text) => {

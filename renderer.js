@@ -3366,8 +3366,9 @@ confirmExport.addEventListener('click', async () => {
  * @description 聊天相关功能
  */
 let isRecording = false;
-let mediaRecorder = null;
-let audioChunks = [];
+// 删除未使用的媒体录制相关变量
+// let mediaRecorder = null;
+// let audioChunks = [];
 
 // 获取DOM元素
 let chatContainer, chatSidebar, summonButton, minimizeButton, expandButton;
@@ -3421,9 +3422,10 @@ function initChat() {
     summonButton = document.getElementById('summonAwei');
     minimizeButton = document.getElementById('minimizeChat');
     chatInput = document.getElementById('chatInput');
-    voiceButton = document.getElementById('voiceInput');
-    sendButton = document.getElementById('sendMessage');
+    voiceButton = document.getElementById('voiceInput'); // 修正ID
+    sendButton = document.getElementById('sendMessage'); // 修正ID
     chatMessages = document.getElementById('chatMessages');
+    clearHistoryButton = document.getElementById('clearChatHistory'); // 声明清除历史按钮变量
 
     // 检查所有必需的DOM元素是否存在
     if (!chatContainer || !chatSidebar || !summonButton || !minimizeButton || 
@@ -3446,8 +3448,13 @@ function initChat() {
     sendButton.addEventListener('click', sendMessage);
     chatInput.addEventListener('input', adjustInputHeight);
     
+    // 添加清除历史按钮的事件监听
+    if (clearHistoryButton) {
+        clearHistoryButton.addEventListener('click', clearChatHistory);
+    }
+    
     // 语音输入相关事件
-    voiceButton.addEventListener('mousedown', startRecording);
+    voiceButton.addEventListener('mousedown', startRecording); // 修复函数名
     voiceButton.addEventListener('mouseup', stopRecording);
     voiceButton.addEventListener('mouseleave', stopRecording);
 
@@ -3464,7 +3471,10 @@ function initChat() {
 
 // 在DOM加载完成后初始化聊天功能
 document.addEventListener('DOMContentLoaded', () => {
+    // 初始化基本界面
     initChat();
+    // 或者使用新的聊天功能初始化（根据需要选择使用）
+    // initChatFeatures();
 });
 
 // 添加消息到聊天框
@@ -3662,27 +3672,39 @@ function addMessage(text, type) {
     messageContainer.appendChild(messageContent);
     
     // 如果是机器人消息，检查是否包含搜索建议
-    if (type === 'bot' && trimmedText.includes('搜索建议：')) {
-        const [message, suggestions] = trimmedText.split('搜索建议：');
+    if (type === 'bot') {
+        // 提取【】格式的搜索建议
+        const suggestions = [];
+        const bracketRegex = /【(.+?)】/g;
+        let match;
         
-        // 清空之前的内容，重新设置不含搜索建议的部分
-        messageContent.textContent = message;
+        while ((match = bracketRegex.exec(trimmedText)) !== null) {
+            if (match[1] && match[1].trim()) {
+                suggestions.push(match[1].trim());
+            }
+        }
         
-        if (suggestions) {
+        // 如果有提取到搜索建议，创建快捷检索选项区域
+        if (suggestions.length > 0) {
             const suggestionsDiv = document.createElement('div');
             suggestionsDiv.className = 'search-suggestions';
             
-            suggestions.trim().split('\n').forEach(suggestion => {
-                if (suggestion.trim()) {
-                    const suggestionButton = document.createElement('button');
-                    suggestionButton.className = 'search-suggestion';
-                    suggestionButton.textContent = suggestion;
-                    suggestionButton.onclick = () => {
-                        document.getElementById('searchInput').value = suggestion;
-                        document.getElementById('searchButton').click();
-                    };
-                    suggestionsDiv.appendChild(suggestionButton);
-                }
+            // 添加标题
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'suggestions-title';
+            titleDiv.textContent = '快捷检索选项';
+            suggestionsDiv.appendChild(titleDiv);
+            
+            // 添加每个检索选项按钮
+            suggestions.forEach(suggestion => {
+                const suggestionButton = document.createElement('button');
+                suggestionButton.className = 'search-suggestion';
+                suggestionButton.textContent = suggestion;
+                suggestionButton.onclick = () => {
+                    // 使用和历史搜索相同的方式应用到搜索表单
+                    applySuggestion(suggestion);
+                };
+                suggestionsDiv.appendChild(suggestionButton);
             });
             
             messageContainer.appendChild(suggestionsDiv);
@@ -3731,45 +3753,52 @@ async function sendMessage() {
             chatMessages.removeChild(loadingMessage);
         }
         
-        // 添加AI回复
-        addMessage(response.reply, 'bot');
+        // 处理AI回复
+        let replyContent = response.reply;
         
-        // 如果有搜索建议，添加到回复中
+        // 检查是否有搜索建议，如果有且回复中未包含，则将其添加到回复中
         if (response.searchSuggestions && response.searchSuggestions.length > 0) {
-            // 在这里处理搜索建议，将其添加到消息中
-            const suggestionsContainer = document.createElement('div');
-            suggestionsContainer.className = 'search-suggestions';
+            console.log('接收到搜索建议:', response.searchSuggestions);
             
-            const suggestionsHeader = document.createElement('div');
-            suggestionsHeader.className = 'suggestions-header';
-            suggestionsHeader.textContent = '论文搜索建议:';
-            suggestionsContainer.appendChild(suggestionsHeader);
+            // 检查回复中是否已包含搜索建议格式的内容
+            const hasSuggestionFormat = /【.+?】/.test(replyContent);
             
-            const suggestionsList = document.createElement('div');
-            suggestionsList.className = 'suggestions-list';
-            
-            response.searchSuggestions.forEach(suggestion => {
-                const suggestionItem = document.createElement('div');
-                suggestionItem.className = 'suggestion-item';
-                suggestionItem.textContent = suggestion;
+            if (!hasSuggestionFormat) {
+                // 在回复末尾添加搜索建议
+                if (!replyContent.endsWith('\n')) {
+                    replyContent += '\n\n';
+                } else if (!replyContent.endsWith('\n\n')) {
+                    replyContent += '\n';
+                }
                 
-                // 添加点击事件，应用搜索建议
-                suggestionItem.addEventListener('click', () => {
-                    applySuggestion(suggestion);
+                // 添加搜索建议，使用【】格式，确保与addMessage函数中的解析匹配
+                response.searchSuggestions.forEach(suggestion => {
+                    replyContent += `【${suggestion}】 `;
                 });
-                
-                suggestionsList.appendChild(suggestionItem);
-            });
+            }
+        } else {
+            console.log('未检测到搜索建议');
+        }
+        
+        // 添加完整回复
+        addMessage(replyContent, 'bot');
+        
+        // 如果这是用户的第一次提问，添加上下文记忆提示
+        if (chatMessages.querySelectorAll('.user-message').length === 1) {
+            const contextHintMessage = document.createElement('div');
+            contextHintMessage.className = 'context-hint';
+            contextHintMessage.textContent = '提示：我会记住我们的对话，你可以接着上下文继续提问';
+            chatMessages.appendChild(contextHintMessage);
             
-            suggestionsContainer.appendChild(suggestionsList);
-            
-            // 创建一个包含建议的消息
-            const messageContainer = document.createElement('div');
-            messageContainer.className = 'message bot-message';
-            messageContainer.appendChild(suggestionsContainer);
-            
-            chatMessages.appendChild(messageContainer);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            // 3秒后淡出提示
+            setTimeout(() => {
+                contextHintMessage.classList.add('fade-out');
+                setTimeout(() => {
+                    if (contextHintMessage.parentNode === chatMessages) {
+                        chatMessages.removeChild(contextHintMessage);
+                    }
+                }, 1000);
+            }, 3000);
         }
     } catch (error) {
         console.error('发送消息失败:', error);
@@ -3780,39 +3809,70 @@ async function sendMessage() {
 // 应用搜索建议到搜索表单
 function applySuggestion(suggestion) {
     try {
-        // 获取搜索表单的第一个搜索条件
-        const firstSearchField = document.querySelector('.search-field');
-        if (firstSearchField) {
-            const termInput = firstSearchField.querySelector('.search-term');
-            if (termInput) {
-                termInput.value = suggestion;
-                
-                // 切换到搜索页面并触发搜索
-                const mainSearchContainer = document.getElementById('mainSearchContainer');
-                const tabLinks = document.querySelectorAll('.tab-link');
-                
-                // 切换到搜索标签
-                tabLinks.forEach(link => {
-                    if (link.getAttribute('data-tab') === 'search') {
-                        link.click();
-                    }
-                });
-                
-                // 滚动到搜索表单
-                if (mainSearchContainer) {
-                    mainSearchContainer.scrollIntoView({ behavior: 'smooth' });
-                    
-                    // 等待一下再触发搜索，确保UI已更新
-                    setTimeout(() => {
-                        // 触发搜索按钮点击
-                        const searchButton = document.getElementById('searchButton');
-                        if (searchButton) {
-                            searchButton.click();
-                        }
-                    }, 500);
-                }
-            }
+        console.log('应用搜索建议到搜索表单:', suggestion);
+        
+        // 创建一个搜索条件对象，类似于历史记录中的对象
+        const searchData = {
+            searchField: 'all',  // 默认搜索所有字段
+            searchInput: suggestion,  // 使用建议作为搜索词
+            timeRange: document.getElementById('timeRange')?.value || '30',  // 使用当前时间范围或默认值(30天)
+            sortBy: document.getElementById('sortBy')?.value || 'relevance',  // 使用当前排序方式或默认值
+            sortOrder: document.getElementById('sortOrder')?.value || 'descending',  // 使用当前排序顺序或默认值
+            maxResults: document.getElementById('maxResults')?.value || '50',  // 使用当前结果数量限制或默认值(50)
+            additionalFields: []  // 不添加额外字段
+        };
+        
+        // 切换到主搜索标签页
+        const mainSearchTab = document.getElementById('mainSearchTab');
+        if (mainSearchTab) {
+            console.log('切换到主搜索标签页');
+            mainSearchTab.click();
+        } else {
+            console.error('找不到主搜索标签页元素');
         }
+        
+        // 应用搜索条件并执行搜索
+        setTimeout(() => {
+            try {
+                // 使用与历史记录相同的应用函数
+                applySearchConditions(searchData);
+                
+                // 显示成功提示
+                const searchForm = document.querySelector('.search-form');
+                if (searchForm) {
+                    const successMessage = document.createElement('div');
+                    successMessage.className = 'search-suggestion-applied';
+                    successMessage.textContent = `已应用检索词: "${suggestion}"`;
+                    successMessage.style.cssText = `
+                        padding: 8px 12px;
+                        background-color: #e3f9e3;
+                        color: #2e7d32;
+                        border-radius: 4px;
+                        margin: 10px 0;
+                        font-size: 14px;
+                        opacity: 1;
+                        transition: opacity 0.5s ease;
+                    `;
+                    
+                    // 插入到搜索表单前面
+                    searchForm.parentNode.insertBefore(successMessage, searchForm);
+                    
+                    // 3秒后淡出
+                    setTimeout(() => {
+                        successMessage.style.opacity = '0';
+                        setTimeout(() => {
+                            if (successMessage.parentNode) {
+                                successMessage.parentNode.removeChild(successMessage);
+                            }
+                        }, 500);
+                    }, 3000);
+                }
+                
+                console.log('搜索建议应用成功');
+            } catch (innerError) {
+                console.error('应用搜索条件时出错:', innerError);
+            }
+        }, 300); // 给页面切换一些时间
     } catch (error) {
         console.error('应用搜索建议失败:', error);
     }
@@ -3821,154 +3881,15 @@ function applySuggestion(suggestion) {
 // 语音输入相关
 async function startRecording() {
     try {
-        // 如果有已存在的录音，先停止
-        if (window.mediaRecorder && window.mediaRecorder.state === 'recording') {
-            window.mediaRecorder.stop();
-        }
-
-        // 请求麦克风权限
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            } 
-        });
-
-        // 创建MediaRecorder实例
-        window.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-        window.audioChunks = [];
-        
-        // 添加正在识别的提示
-        const loadingMessage = addMessage('正在聆听...', 'user');
-        
-        // 状态变化
+        // 显示按钮状态变化，但不执行实际录音
         isRecording = true;
         voiceButton.textContent = '松开结束';
         voiceButton.classList.add('recording');
         
-        // 收集音频数据
-        window.mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                window.audioChunks.push(event.data);
-            }
-        };
-
-        // 录音结束处理
-        window.mediaRecorder.onstop = async () => {
-            try {
-                // 麦克风数据收集完成，创建音频Blob
-                const audioBlob = new Blob(window.audioChunks, { type: 'audio/webm' });
-                
-                // 尝试使用浏览器内置的语音识别功能
-                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-                    try {
-                        // 移除"正在聆听"消息
-                        if (loadingMessage && loadingMessage.parentNode === chatMessages) {
-                            chatMessages.removeChild(loadingMessage);
-                        }
-                        
-                        // 使用内置的语音识别
-                        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                        const recognition = new SpeechRecognition();
-                        recognition.lang = 'zh-CN';
-                        recognition.interimResults = false;
-                        recognition.maxAlternatives = 1;
-                        
-                        // 创建一个Promise包装recognition
-                        const recognitionResult = await new Promise((resolve, reject) => {
-                            // 设置20秒超时
-                            const timeout = setTimeout(() => {
-                                try {
-                                    recognition.abort();
-                                } catch (e) {}
-                                reject(new Error('语音识别超时'));
-                            }, 20000);
-                            
-                            recognition.onresult = (event) => {
-                                clearTimeout(timeout);
-                                const transcript = event.results[0][0].transcript;
-                                resolve(transcript);
-                            };
-                            
-                            recognition.onerror = (event) => {
-                                clearTimeout(timeout);
-                                reject(new Error(event.error || '语音识别失败'));
-                            };
-                            
-                            recognition.start();
-                        });
-                        
-                        // 识别成功，在输入框中显示
-                        chatInput.value = recognitionResult;
-                        
-                        // 自动发送消息
-                        sendMessage();
-                    } catch (recognitionError) {
-                        console.error('浏览器语音识别失败，尝试使用第二方案', recognitionError);
-                        
-                        // 切换到备用方案 - 使用本地音频文件转文本
-                        const messageContainer = addMessage('使用备用语音识别方式...', 'bot');
-                        
-                        try {
-                            // 将录音转为本地URL和数据URL
-                            const audioUrl = URL.createObjectURL(audioBlob);
-                            
-                            // 播放音频以确认录音成功
-                            const audio = new Audio(audioUrl);
-                            audio.play();
-                            
-                            // 创建一个新的添加消息，包含录音控件
-                            const audioElement = document.createElement('audio');
-                            audioElement.controls = true;
-                            audioElement.src = audioUrl;
-                            
-                            const msgDiv = document.createElement('div');
-                            msgDiv.innerHTML = '您的语音已录制，请直接输入文字：';
-                            msgDiv.appendChild(audioElement);
-                            
-                            // 添加到消息区域
-                            messageContainer.appendChild(msgDiv);
-                        } catch (error) {
-                            console.error('无法处理录音:', error);
-                            addMessage('语音识别失败，请直接输入文字: ' + error.message, 'bot');
-                        }
-                    }
-                } else {
-                    // 浏览器不支持语音识别
-                    addMessage('您的浏览器不支持语音识别，请直接输入文字。', 'bot');
-                }
-            } catch (error) {
-                console.error('语音识别处理错误:', error);
-                addMessage('语音识别出错，请直接输入文字: ' + error.message, 'bot');
-            } finally {
-                // 关闭麦克风流
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
-                }
-                
-                // 重置录音状态
-                isRecording = false;
-                voiceButton.textContent = '按住说话';
-                voiceButton.classList.remove('recording');
-                
-                // 移除loading消息（如果还存在）
-                if (loadingMessage && loadingMessage.parentNode === chatMessages) {
-                    try {
-                        chatMessages.removeChild(loadingMessage);
-                    } catch (e) {}
-                }
-            }
-        };
-        
-        // 开始录音
-        window.mediaRecorder.start();
-        
+        // 显示开发中消息
+        addMessage('功能开发中', 'bot');
     } catch (error) {
-        console.error('开启录音失败:', error);
-        addMessage('无法开启录音功能，请检查麦克风权限: ' + error.message, 'bot');
-        
-        // 重置按钮状态
+        console.error('语音功能开发中:', error);
         isRecording = false;
         voiceButton.textContent = '按住说话';
         voiceButton.classList.remove('recording');
@@ -3977,15 +3898,6 @@ async function startRecording() {
 
 function stopRecording() {
     console.log('停止录音');
-    
-    // 停止录音
-    if (window.mediaRecorder && window.mediaRecorder.state === 'recording') {
-        try {
-            window.mediaRecorder.stop();
-        } catch (error) {
-            console.error('停止录音时出错:', error);
-        }
-    }
     
     // 重置按钮状态
     isRecording = false;
@@ -4019,14 +3931,14 @@ function initChatFeatures() {
     const chatSidebar = document.getElementById('chatSidebar');
     const summonButton = document.getElementById('summonAwei');
     const minimizeButton = document.getElementById('minimizeChat');
-    const expandButton = document.getElementById('expandChat');
     const chatInput = document.getElementById('chatInput');
-    const voiceButton = document.getElementById('voiceInput');
-    const sendButton = document.getElementById('sendMessage');
+    const voiceButton = document.getElementById('voiceInput'); // 修正ID
+    const sendButton = document.getElementById('sendMessage'); // 修正ID
     const chatMessages = document.getElementById('chatMessages');
+    const clearHistoryButton = document.getElementById('clearChatHistory'); // 添加清除历史按钮
 
     if (!chatContainer || !chatSidebar || !summonButton || !minimizeButton || 
-        !expandButton || !chatInput || !voiceButton || !sendButton || !chatMessages) {
+        !chatInput || !voiceButton || !sendButton || !chatMessages) {
         console.error('聊天组件初始化失败：部分DOM元素未找到');
         return;
     }
@@ -4066,11 +3978,16 @@ function initChatFeatures() {
     // 绑定事件监听器
     summonButton.addEventListener('click', showChat);
     minimizeButton.addEventListener('click', hideChat);
-    expandButton.addEventListener('click', showChat);
+    chatSidebar.addEventListener('click', showChat);
     chatInput.addEventListener('input', adjustInputHeight);
     sendButton.addEventListener('click', sendMessage);
     
-    // 语音输入相关事件
+    // 添加清除历史按钮事件
+    if (clearHistoryButton) {
+        clearHistoryButton.addEventListener('click', clearChatHistory);
+    }
+    
+    // 语音输入相关事件 - 保留UI交互但不执行实际录音
     voiceButton.addEventListener('mousedown', startRecording);
     voiceButton.addEventListener('mouseup', stopRecording);
     voiceButton.addEventListener('mouseleave', stopRecording);
@@ -4082,8 +3999,94 @@ function initChatFeatures() {
             sendMessage();
         }
     });
-}// 在DOM加载完成后初始化聊天功能
-document.addEventListener('DOMContentLoaded', () => {
-    initChatFeatures();
-});
+}
+
+// 清除聊天历史
+async function clearChatHistory() {
+    try {
+        // 调用预加载脚本中的清除历史函数
+        const success = await window.electronAPI.clearChatHistory();
+        
+        // 清空聊天界面
+        if (chatMessages) {
+            chatMessages.innerHTML = '';
+            
+            // 添加一个新的欢迎消息
+            addMessage('你好！我是你的学术导师Awei。我可以帮你：\n1. 推荐论文检索关键词\n2. 分析研究方向\n3. 解答学术问题\n请问有什么可以帮你的吗？', 'bot');
+            
+            console.log('聊天历史已清除');
+        }
+        
+        // 显示成功或失败消息
+        if (success) {
+            console.log('清除历史记录成功');
+        } else {
+            console.error('清除历史记录失败');
+        }
+    } catch (error) {
+        console.error('清除聊天历史时出错:', error);
+    }
+}
+
+// 为快捷检索选项添加更好的样式
+const searchSuggestionStyles = document.createElement('style');
+searchSuggestionStyles.textContent = `
+.search-suggestions {
+  margin-top: 12px;
+  padding: 12px 15px;
+  background-color: #f0f6ff;
+  border-radius: 8px;
+  border-left: 4px solid #4a90e2;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.suggestions-title {
+  font-weight: bold;
+  margin-bottom: 10px;
+  color: #333;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.suggestions-title:before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%234a90e2"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>');
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.search-suggestion {
+  display: inline-block;
+  margin: 5px 8px 5px 0;
+  padding: 8px 15px;
+  background-color: #e3f0ff;
+  color: #2c6cb6;
+  border: 1px solid #c6dcf1;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.search-suggestion:hover {
+  background-color: #d0e5ff;
+  color: #1a4f99;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+}
+
+.search-suggestion:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  background-color: #c2dcff;
+}
+`;
+document.head.appendChild(searchSuggestionStyles);
 
