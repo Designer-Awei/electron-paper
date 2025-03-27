@@ -2733,11 +2733,20 @@ async function exportKnowledgeBaseToCustomFile() {
             return false;
         }
         
+        // 获取当前日期和时间并格式化为 YYYY-MM-DD_HH-MM 格式
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const formattedDateTime = `${year}-${month}-${day}_${hours}-${minutes}`;
+        
         // 弹出文件保存对话框
         const options = {
             title: '导出知识库',
             buttonLabel: '导出',
-            defaultPath: `知识库导出_${new Date().toISOString().slice(0, 10)}.json`,
+            defaultPath: `知识库导出_${formattedDateTime}.json`,
             filters: [
                 { name: 'JSON文件', extensions: ['json'] }
             ]
@@ -3713,14 +3722,14 @@ function addMessage(text, type) {
                         // 去除可能的系统提示文字
                         let processedText = part;
                         
-                        // 去除"首先"开头的提示词
-                        processedText = processedText.replace(/^首先，\s*提供专业、准确、简洁的学术分析[，：,:]?\s*/i, '');
+                        // 去除"首先"开头的提示词 - 增强版正则表达式
+                        processedText = processedText.replace(/^首先，?\s*(提供专业、准确、简洁的学术分析|分析如下)[，：,:，:；;]?\s*/i, '');
                         
-                        // 去除"提取"开头的提示词
-                        processedText = processedText.replace(/^提取适合检索的关键词\s*/i, '');
+                        // 去除"提取"开头的提示词 - 增强版正则表达式
+                        processedText = processedText.replace(/^(提取|下面是)适合(检索|搜索)的关键词[：:，,；;]?\s*/i, '');
                         
-                        // 去掉"快捷检索选项："前缀
-                        processedText = processedText.replace(/^快捷检索选项：\s*/i, '');
+                        // 去掉"快捷检索选项："前缀 - 增强版正则表达式
+                        processedText = processedText.replace(/^(快捷[检搜]索选项|[检搜]索建议)[：:，,；;]?\s*/i, '快捷检索选项：');
                         
                         // 过滤Markdown标记，但如果是欢迎消息则保留序号
                         if (isWelcomeMessage) {
@@ -3728,7 +3737,12 @@ function addMessage(text, type) {
                             textNode.textContent = processedText.replace(/(\*\*|__|\*|_|~~|##|###|####|#####|######)/g, '');
                         } else {
                             // 完全过滤Markdown符号，包括序号（除非是欢迎消息）
-                            textNode.textContent = processedText.replace(/(\*\*|__|\*|_|~~|##|###|####|#####|######|\d+\.|[\-\+])/g, '');
+                            // 修改正则表达式，确保不会在行首留下空格
+                            textNode.textContent = processedText
+                                // 先处理行首的Markdown序号和符号
+                                .replace(/^\s*(\d+\.|\-|\+|\*)\s+/gm, '')
+                                // 再处理其他Markdown格式符号
+                                .replace(/(\*\*|__|\*|_|~~|##|###|####|#####|######)/g, '');
                         }
                         
                         messageContent.appendChild(textNode);
@@ -3738,14 +3752,14 @@ function addMessage(text, type) {
                 // 没有分隔线的普通文本
                 let processedText = trimmedText;
                 
-                // 去除"首先"开头的提示词
-                processedText = processedText.replace(/^首先，\s*提供专业、准确、简洁的学术分析[，：,:]?\s*/i, '');
+                // 去除"首先"开头的提示词 - 增强版正则表达式
+                processedText = processedText.replace(/^首先，?\s*(提供专业、准确、简洁的学术分析|分析如下)[，：,:，:；;]?\s*/i, '');
                 
-                // 去除"提取"开头的提示词
-                processedText = processedText.replace(/^提取适合检索的关键词\s*/i, '');
+                // 去除"提取"开头的提示词 - 增强版正则表达式
+                processedText = processedText.replace(/^(提取|下面是)适合(检索|搜索)的关键词[：:，,；;]?\s*/i, '');
                 
-                // 去掉"快捷检索选项："前缀
-                processedText = processedText.replace(/^快捷检索选项：\s*/i, '');
+                // 去掉"快捷检索选项："前缀 - 增强版正则表达式
+                processedText = processedText.replace(/^(快捷[检搜]索选项|[检搜]索建议)[：:，,；;]?\s*/i, '快捷检索选项：');
                 
                 // 过滤Markdown标记，但如果是欢迎消息则保留序号
                 if (isWelcomeMessage) {
@@ -3753,7 +3767,12 @@ function addMessage(text, type) {
                     messageContent.textContent = processedText.replace(/(\*\*|__|\*|_|~~|##|###|####|#####|######)/g, '');
                 } else {
                     // 完全过滤Markdown符号，包括序号
-                    messageContent.textContent = processedText.replace(/(\*\*|__|\*|_|~~|##|###|####|#####|######|\d+\.|[\-\+])/g, '');
+                    // 修改正则表达式，确保不会在行首留下空格
+                    messageContent.textContent = processedText
+                        // 先处理行首的Markdown序号和符号
+                        .replace(/^\s*(\d+\.|\-|\+|\*)\s+/gm, '')
+                        // 再处理其他Markdown格式符号
+                        .replace(/(\*\*|__|\*|_|~~|##|###|####|#####|######)/g, '');
                 }
             }
         } else {

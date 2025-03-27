@@ -386,7 +386,28 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('dialog:showInputBox', async (_, options) => {
-    return await dialog.showMessageBox(mainWindow, options);
+    try {
+      // 处理不同类型的对话框请求
+      if (options.type === 'file-open') {
+        const result = await dialog.showOpenDialog(mainWindow, options.options);
+        return { canceled: result.canceled, filePath: result.filePaths?.[0] };
+      }
+      else if (options.type === 'file-save') {
+        const result = await dialog.showSaveDialog(mainWindow, options.options);
+        return { canceled: result.canceled, filePath: result.filePath };
+      }
+      else if (options.type === 'confirm') {
+        const result = await dialog.showMessageBox(mainWindow, options.options);
+        return result.response;
+      }
+      else {
+        // 默认使用showMessageBox
+        return await dialog.showMessageBox(mainWindow, options);
+      }
+    } catch (err) {
+      console.error('显示对话框错误:', err);
+      throw err;
+    }
   });
   
   ipcMain.handle('open-external', async (_, url) => {
