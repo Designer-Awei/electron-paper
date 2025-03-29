@@ -1607,7 +1607,10 @@ async function translateText(text) {
         
         // 更新为使用新的API
         const translated = await window.electronAPI.translateText(text, apiKey, selectedModel);
-        return translated;
+        
+        // 清理翻译结果，删除开头的空白行
+        const cleanedTranslation = translated.replace(/^\s*[\r\n]+/g, '');
+        return cleanedTranslation;
     } catch (error) {
         console.error('翻译错误:', error);
         throw error;
@@ -2946,8 +2949,13 @@ function showKnowledgeBaseItemDetail(id) {
             });
         }
         
-        // 设置摘要
-        detailAbstract.textContent = item.summary;
+        // 设置摘要（确保没有首行空白）
+        let summaryText = item.summary;
+        if (summaryText) {
+            // 删除开头的空白行
+            summaryText = summaryText.replace(/^\s*[\r\n]+/g, '');
+        }
+        detailAbstract.textContent = summaryText;
         
         // 设置笔记
         detailNotes.innerHTML = item.notes ? item.notes.replace(/\n/g, '<br>') : '<em>暂无笔记</em>';
@@ -3001,7 +3009,15 @@ function showKnowledgeBaseItemDetail(id) {
             } else {
                 // 切换到翻译
                 detailTitle.textContent = item.translatedTitle || item.title;
-                detailAbstract.textContent = item.translatedSummary || item.summary;
+                
+                // 清理翻译文本，确保没有首行空白
+                let translatedSummary = item.translatedSummary || item.summary;
+                if (translatedSummary) {
+                    // 删除开头的空白行
+                    translatedSummary = translatedSummary.replace(/^\s*[\r\n]+/g, '');
+                }
+                
+                detailAbstract.textContent = translatedSummary;
                 toggleLanguageButton.textContent = '显示原文';
                 toggleLanguageButton.dataset.showingTranslation = 'true';
             }
