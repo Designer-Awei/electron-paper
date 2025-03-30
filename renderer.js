@@ -3414,34 +3414,29 @@ let adjustChatContainerPosition; // 声明为全局函数变量
 // 隐藏聊天框
 function hideChat() {
     if (!chatContainer || !chatSidebar) return;
+    
+    // 移除可见性类
     chatContainer.classList.remove('visible');
-    setTimeout(() => {
-        chatContainer.style.display = 'none';
-        chatSidebar.style.display = 'block'; // 确保侧边栏显示
-        chatSidebar.classList.add('visible');
-    }, 300);
+    // 添加侧边栏可见性类
+    chatSidebar.classList.add('visible');
+    
+    // 强制重绘以确保过渡效果正常
+    void chatContainer.offsetHeight;
+    void chatSidebar.offsetHeight;
 }
 
 // 显示聊天框
 function showChat() {
     if (!chatContainer || !chatSidebar) return;
-    chatContainer.style.display = 'flex';
     
-    // 调用adjustChatContainerPosition确保聊天框位置正确
-    if (typeof adjustChatContainerPosition === 'function') {
-        adjustChatContainerPosition();
-    }
+    // 添加可见性类
+    chatContainer.classList.add('visible');
+    // 移除侧边栏可见性类
+    chatSidebar.classList.remove('visible');
     
-    setTimeout(() => {
-        chatContainer.classList.add('visible');
-        chatSidebar.style.display = 'none'; // 隐藏侧边栏
-        chatSidebar.classList.remove('visible');
-        
-        // 再次调用adjustChatContainerPosition确保过渡后位置正确
-        if (typeof adjustChatContainerPosition === 'function') {
-            adjustChatContainerPosition();
-        }
-    }, 10);
+    // 强制重绘以确保过渡效果正常
+    void chatContainer.offsetHeight;
+    void chatSidebar.offsetHeight;
 }
 
 // 完全关闭聊天
@@ -3467,84 +3462,41 @@ function initChat() {
     // 获取所有需要的DOM元素
     chatContainer = document.getElementById('chatContainer');
     chatSidebar = document.getElementById('chatSidebar');
-    summonButton = document.getElementById('summonAwei');
-    minimizeButton = document.getElementById('minimizeChat');
     chatInput = document.getElementById('chatInput');
-    voiceButton = document.getElementById('voiceInput'); // 修正ID
-    sendButton = document.getElementById('sendMessage'); // 修正ID
     chatMessages = document.getElementById('chatMessages');
-    clearHistoryButton = document.getElementById('clearChatHistory'); // 声明清除历史按钮变量
     
-    // 获取分页栏元素
-    const paginationElement = document.querySelector('.pagination');
-
     // 检查所有必需的DOM元素是否存在
-    if (!chatContainer || !chatSidebar || !summonButton || !minimizeButton || 
-        !chatInput || !voiceButton || !sendButton || !chatMessages) {
+    if (!chatContainer || !chatSidebar || !chatInput || !chatMessages) {
         console.error('聊天组件初始化失败：部分DOM元素未找到');
         return;
     }
-
+    
     // 初始化界面状态
-    chatContainer.style.display = 'none';
-    chatSidebar.style.display = 'none';
+    hideChat();
     
     // 添加欢迎消息
     addMessage('你好！我是你的学术导师Awei。我可以帮你：\n1. 推荐论文检索关键词\n2. 分析研究方向\n3. 解答学术问题\n请问有什么可以帮你的吗？', 'bot');
-
+    
     // 绑定事件监听器
-    summonButton.addEventListener('click', showChat);
-    minimizeButton.addEventListener('click', hideChat);
+    document.getElementById('summonAwei').addEventListener('click', showChat);
+    document.getElementById('minimizeChat').addEventListener('click', hideChat);
     chatSidebar.addEventListener('click', showChat);
-    sendButton.addEventListener('click', sendMessage);
+    
+    // 绑定其他事件监听器
+    document.getElementById('sendMessage').addEventListener('click', sendMessage);
+    document.getElementById('voiceInput').addEventListener('mousedown', startRecording);
+    document.getElementById('voiceInput').addEventListener('mouseup', stopRecording);
+    document.getElementById('voiceInput').addEventListener('mouseleave', stopRecording);
+    document.getElementById('clearChatHistory').addEventListener('click', clearChatHistory);
+    
+    // 绑定输入框事件
     chatInput.addEventListener('input', adjustInputHeight);
-    
-    // 添加清除历史按钮的事件监听
-    if (clearHistoryButton) {
-        clearHistoryButton.addEventListener('click', clearChatHistory);
-    }
-    
-    // 语音输入相关事件
-    voiceButton.addEventListener('mousedown', startRecording); // 修复函数名
-    voiceButton.addEventListener('mouseup', stopRecording);
-    voiceButton.addEventListener('mouseleave', stopRecording);
-
-    // 回车发送消息
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
     });
-
-    // 定义全局聊天框位置调整函数
-    adjustChatContainerPosition = function() {
-        if (!chatContainer || !paginationElement) return;
-        
-        // 获取分页栏的位置信息
-        const paginationRect = paginationElement.getBoundingClientRect();
-        const windowHeight = window.innerHeight;
-        
-        // 计算分页栏距离窗口底部的距离
-        const bottomDistance = windowHeight - paginationRect.top;
-        
-        // 调整聊天框的高度，确保其底部与分页栏保持适当距离
-        if (bottomDistance > 0) {
-            chatContainer.style.height = `calc(100vh - 80px - ${bottomDistance + 20}px)`;
-        }
-    };
-    
-    // 初始调整位置
-    adjustChatContainerPosition();
-    
-    // 添加窗口大小变化和滚动事件监听
-    window.addEventListener('resize', adjustChatContainerPosition);
-    window.addEventListener('scroll', adjustChatContainerPosition);
-    
-    // 定期检查并调整位置（处理动态加载的内容可能导致的布局变化）
-    setInterval(adjustChatContainerPosition, 1000);
-
-    console.log('聊天组件初始化完成');
 }
 
 // 在DOM加载完成后初始化聊天功能
@@ -4108,28 +4060,47 @@ function applySuggestion(suggestion) {
 // 语音输入相关
 async function startRecording() {
     try {
+        const voiceButton = document.getElementById('voiceInput');
+        if (!voiceButton) {
+            console.error('语音按钮元素未找到');
+            return;
+        }
+        
         // 显示按钮状态变化，但不执行实际录音
         isRecording = true;
         voiceButton.textContent = '松开结束';
         voiceButton.classList.add('recording');
         
         // 显示开发中消息
-        addMessage('功能开发中', 'bot');
+        addMessage('语音功能正在开发中', 'bot');
     } catch (error) {
         console.error('语音功能开发中:', error);
         isRecording = false;
-        voiceButton.textContent = '按住说话';
-        voiceButton.classList.remove('recording');
+        const voiceButton = document.getElementById('voiceInput');
+        if (voiceButton) {
+            voiceButton.textContent = '按住说话';
+            voiceButton.classList.remove('recording');
+        }
     }
 }
 
 function stopRecording() {
-    console.log('停止录音');
-    
-    // 重置按钮状态
-    isRecording = false;
-    voiceButton.textContent = '按住说话';
-    voiceButton.classList.remove('recording');
+    try {
+        const voiceButton = document.getElementById('voiceInput');
+        if (!voiceButton) {
+            console.error('语音按钮元素未找到');
+            return;
+        }
+        
+        console.log('停止录音');
+        
+        // 重置按钮状态
+        isRecording = false;
+        voiceButton.textContent = '按住说话';
+        voiceButton.classList.remove('recording');
+    } catch (error) {
+        console.error('停止录音时出错:', error);
+    }
 }
 
 // 绑定事件监听

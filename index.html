@@ -1314,26 +1314,29 @@
         /* 聊天框样式 */
         .chat-container {
             position: fixed;
-            right: -360px; /* 初始位置在屏幕外 */
             top: 80px;
+            right: 20px;
             width: 360px;
-            height: calc(100vh - 200px); /* 修改为更大的底部间距，避免被分页栏遮挡 */
+            height: calc(100vh - 200px);
             background-color: white;
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 1000;
-            display: none; /* 初始状态隐藏 */
+            z-index: 99999;
+            display: flex;
             flex-direction: column;
             overflow: hidden;
-            transition: right 0.3s ease, bottom 0.3s ease, height 0.3s ease; /* 添加bottom和height过渡效果 */
-            margin-bottom: 60px; /* 保留底部边距 */
-            bottom: auto; /* 添加bottom属性，以便动态调整位置 */
+            opacity: 0;
+            visibility: hidden;
+            transform: translateX(380px);
+            transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+            will-change: transform, opacity;
         }
 
         /* 显示聊天框时的样式 */
         .chat-container.visible {
-            right: 20px; /* 显示时的位置 */
-            display: flex;
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(0);
         }
 
         .chat-header {
@@ -1515,25 +1518,25 @@
         /* 侧边栏样式 */
         .chat-sidebar {
             position: fixed;
-            right: 0;
             top: 50%;
+            right: 0;
             transform: translateY(-50%);
-            z-index: 1000;
-            display: none;
-            transition: opacity 0.3s ease;
-            opacity: 0;
             width: 10px;
             height: 100px;
             background-color: #4CAF50;
             border-radius: 4px 0 0 4px;
             cursor: pointer;
             box-shadow: -2px 2px 6px rgba(0,0,0,0.1);
+            z-index: 99998;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
         }
 
         /* 显示侧边栏时的样式 */
         .chat-sidebar.visible {
-            display: block;
             opacity: 1;
+            visibility: visible;
         }
 
         .chat-sidebar:hover {
