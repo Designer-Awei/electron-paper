@@ -3986,19 +3986,58 @@ async function sendMessage() {
 }
 
 // 应用搜索建议到搜索表单
-function applySuggestion(suggestion) {
+async function applySuggestion(suggestion) {
     try {
         console.log('应用搜索建议到搜索表单:', suggestion);
         
-        // 创建一个搜索条件对象，类似于历史记录中的对象
+        // 翻译中文关键词为英文
+        let translatedSuggestion = suggestion;
+        try {
+            // 检查是否包含中文字符
+            if (/[\u4e00-\u9fa5]/.test(suggestion)) {
+                console.log('检测到中文关键词，开始翻译');
+                
+                // 获取API密钥和翻译模型
+                if (!apiKey) {
+                    apiKey = await loadApiKey();
+                }
+                
+                if (!apiKey) {
+                    throw new Error('请先在设置中配置SiliconFlow API密钥');
+                }
+                
+                // 使用当前选择的翻译模型
+                const model = settingsModelSelection.value || 'deepseek-ai/DeepSeek-V2';
+                
+                // 构建翻译提示词
+                const prompt = `请将以下中文学术关键词翻译成英文。只需要给出翻译结果，不要解释：\n${suggestion}`;
+                
+                // 调用翻译API
+                const response = await window.electronAPI.chatWithAI(prompt, apiKey, model);
+                
+                // 提取翻译结果（去除可能的额外解释和标点符号）
+                translatedSuggestion = response.reply.trim()
+                    .replace(/^["']|["']$/g, '') // 移除首尾引号
+                    .replace(/[.,;，。；]$/g, '') // 移除末尾标点
+                    .split('\n')[0]; // 只取第一行
+                
+                console.log('翻译结果:', translatedSuggestion);
+            }
+        } catch (translationError) {
+            console.error('翻译关键词时出错:', translationError);
+            // 如果翻译失败，使用原始关键词
+            translatedSuggestion = suggestion;
+        }
+        
+        // 创建一个搜索条件对象
         const searchData = {
             searchField: 'all',  // 默认搜索所有字段
-            searchInput: suggestion,  // 使用建议作为搜索词
-            timeRange: document.getElementById('timeRange')?.value || '30',  // 使用当前时间范围或默认值(30天)
-            sortBy: document.getElementById('sortBy')?.value || 'relevance',  // 使用当前排序方式或默认值
-            sortOrder: document.getElementById('sortOrder')?.value || 'descending',  // 使用当前排序顺序或默认值
-            maxResults: document.getElementById('maxResults')?.value || '50',  // 使用当前结果数量限制或默认值(50)
-            additionalFields: []  // 不添加额外字段
+            searchInput: translatedSuggestion,  // 使用翻译后的关键词
+            timeRange: document.getElementById('timeRange')?.value || '30',
+            sortBy: document.getElementById('sortBy')?.value || 'relevance',
+            sortOrder: document.getElementById('sortOrder')?.value || 'descending',
+            maxResults: document.getElementById('maxResults')?.value || '50',
+            additionalFields: []
         };
         
         // 切换到主搜索标签页
@@ -4016,12 +4055,18 @@ function applySuggestion(suggestion) {
                 // 使用与历史记录相同的应用函数
                 applySearchConditions(searchData);
                 
-                // 显示成功提示
+                // 显示成功提示，包含原始关键词和翻译结果
                 const searchForm = document.querySelector('.search-form');
                 if (searchForm) {
                     const successMessage = document.createElement('div');
                     successMessage.className = 'search-suggestion-applied';
-                    successMessage.textContent = `已应用检索词: "${suggestion}"`;
+                    
+                    // 如果有翻译，显示原文和译文
+                    const messageText = suggestion !== translatedSuggestion ?
+                        `已应用检索词: "${suggestion}" (译为: "${translatedSuggestion}")` :
+                        `已应用检索词: "${suggestion}"`;
+                    
+                    successMessage.textContent = messageText;
                     successMessage.style.cssText = `
                         padding: 8px 12px;
                         background-color: #e3f9e3;
@@ -4051,9 +4096,31 @@ function applySuggestion(suggestion) {
             } catch (innerError) {
                 console.error('应用搜索条件时出错:', innerError);
             }
-        }, 300); // 给页面切换一些时间
+        }, 300);
     } catch (error) {
         console.error('应用搜索建议失败:', error);
+        // 显示错误提示
+        const errorMessage = document.createElement('div');
+        errorMessage.className = 'search-suggestion-error';
+        errorMessage.textContent = `应用检索词失败: ${error.message}`;
+        errorMessage.style.cssText = `
+            padding: 8px 12px;
+            background-color: #ffebee;
+            color: #c62828;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 14px;
+        `;
+        
+        const searchForm = document.querySelector('.search-form');
+        if (searchForm) {
+            searchForm.parentNode.insertBefore(errorMessage, searchForm);
+            setTimeout(() => {
+                if (errorMessage.parentNode) {
+                    errorMessage.parentNode.removeChild(errorMessage);
+                }
+            }, 3000);
+        }
     }
 }
 

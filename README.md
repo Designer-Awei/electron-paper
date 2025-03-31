@@ -304,7 +304,7 @@ electron-paper/
 ### 交流群
 
 欢迎加入我们的用户交流群:
-- QQ群: [456248329]
+- QQ群: 456248329
 
 在群内您可以:
 - 获取最新版本更新
@@ -314,7 +314,7 @@ electron-paper/
 
 ## 贡献与反馈
 
-欢迎通过GitHub Issues提交反馈和建议，或直接提交Pull Request贡献代码。
+欢迎通过GitHub Issues提交反馈和建议。
 
 ## 许可证
 
