@@ -4170,22 +4170,10 @@ function stopRecording() {
     }
 }
 
-// 绑定事件监听
-summonButton.addEventListener('click', showChat);
-minimizeButton.addEventListener('click', hideChat);
-expandButton.addEventListener('click', showChat);
-sendButton.addEventListener('click', sendMessage);
-
-chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
+// 添加DOMContentLoaded事件监听器
+document.addEventListener('DOMContentLoaded', () => {
+    initChatFeatures();
 });
-
-voiceButton.addEventListener('mousedown', startRecording);
-voiceButton.addEventListener('mouseup', stopRecording);
-voiceButton.addEventListener('mouseleave', stopRecording);
 
 /**
  * @description 初始化聊天功能
@@ -4213,8 +4201,8 @@ function initChatFeatures() {
     chatContainer.classList.remove('visible');
     chatSidebar.style.display = 'block';
 
-    // 添加欢迎消息
-    addMessage('你好！我是你的学术导师Awei。我可以帮你：\n1. 推荐论文检索关键词\n2. 分析研究方向\n3. 解答学术问题\n请问有什么可以帮你的吗？', 'bot');
+    // 删除这行，因为欢迎消息已经在initChat中添加
+    // addMessage('你好！我是你的学术导师Awei。我可以帮你：\n1. 推荐论文检索关键词\n2. 分析研究方向\n3. 解答学术问题\n请问有什么可以帮你的吗？', 'bot');
 
     // 自动调整输入框高度
     function adjustInputHeight() {
@@ -4301,7 +4289,6 @@ searchSuggestionStyles.textContent = `
   padding: 12px 15px;
   background-color: #f0f6ff;
   border-radius: 8px;
-  border-left: 4px solid #4a90e2;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
