@@ -5,6 +5,7 @@ const { app, BrowserWindow, globalShortcut, ipcMain, dialog, shell, Menu } = req
 const path = require('path');
 const fs = require('fs');
 const remote = require('@electron/remote/main');
+const os = require('os');
 
 // 初始化remote模块
 remote.initialize();
@@ -126,12 +127,87 @@ function saveLanguage(language) {
 }
 
 /**
+ * 获取系统和运行环境信息
+ * @returns {string} 详细信息字符串
+ */
+function getSystemInfo() {
+  const appVersion = app.getVersion();
+  const electronVersion = process.versions.electron;
+  const nodeVersion = process.versions.node;
+  const v8Version = process.versions.v8;
+  const platform = os.platform();
+  const arch = os.arch();
+  const osVersion = os.release();
+  return [
+    `Electron Paper`,
+    `版本: ${appVersion}`,
+    `Electron: ${electronVersion}`,
+    `Node.js: ${nodeVersion}`,
+    `V8: ${v8Version}`,
+    `OS: ${platform} ${arch} ${osVersion}`,
+    '作者: zhangweiwei3099@gmail.com',
+    'GitHub: https://github.com/Designer-Awei/electron-paper'
+  ].join('\n');
+}
+
+/**
  * @description 设置应用菜单
  * @param {string} language - 语言代码 ('zh' 或 'en')
  */
 function setApplicationMenu(language) {
   currentLanguage = language;
-  
+
+  // 组件化内容
+  const ENV_INFO = getSystemInfo();
+
+  const USAGE_INFO = [
+    '【系统主要用法】',
+    '1. 文献检索：在"文献检索"标签页输入关键词或arXiv ID，支持多条件组合搜索、结果排序、日期过滤。',
+    '2. 查看详情：点击论文标题可展开详细信息，包括摘要、作者、分类、笔记等。',
+    '3. AI助手：点击右上角"召唤Awei"按钮，输入学术问题，AI助手将智能分析并推荐相关文献。',
+    '4. 翻译功能：在"系统设置"中配置SiliconFlow API密钥，点击"翻译"按钮可一键翻译标题和摘要。',
+    '5. 收藏与历史：可将论文加入收藏夹，历史检索自动保存，便于快速复用。',
+    '6. 本地知识库：支持导出论文到本地知识库，添加个人笔记、标记已读/未读，支持中英文切换。',
+    '7. 批量操作：支持批量选择、导出、收藏、删除等操作。',
+    '8. 下载与访问：可直接下载PDF或跳转arXiv官网。',
+    '',
+    '【常见问题】',
+    '- 安装时如何更改安装路径？安装程序界面可自定义。',
+    '- 安装后找不到应用？请在开始菜单"Electron Paper"文件夹查找。',
+    '- 打包或运行报错？请关闭所有实例后重试。',
+    '- 翻译功能无法使用？请检查API密钥配置和网络。',
+    '- 链接无法打开？请确保系统已设置默认浏览器。',
+    '- AI助手回复异常？可尝试重启应用。'
+  ].join('\n');
+
+  const FEEDBACK_INFO = [
+    '1. 通过GitHub Issues反馈：',
+    '   https://github.com/Designer-Awei/electron-paper/issues',
+    '2. 加入QQ群: 456248329',
+    '3. 邮箱: zhangweiwei3099@gmail.com'
+  ].join('\n');
+
+  // 封装带复制按钮的弹窗
+  function showCopyableDialog(options) {
+    dialog.showMessageBox({
+      type: options.type || 'info',
+      title: options.title,
+      message: options.message,
+      detail: options.detail,
+      buttons: ['复制', '确定'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true
+    }).then(result => {
+      if (result.response === 0) {
+        // 复制内容到剪贴板
+        require('electron').clipboard.writeText(
+          [options.message, options.detail].filter(Boolean).join('\n')
+        );
+      }
+    });
+  }
+
   const menuTemplates = {
     zh: [
       {
@@ -179,6 +255,37 @@ function setApplicationMenu(language) {
         label: '帮助',
         submenu: [
           {
+            label: '关于系统',
+            click: () => {
+              showCopyableDialog({
+                title: '关于系统',
+                message: '本项目运行环境',
+                detail: ENV_INFO
+              });
+            }
+          },
+          {
+            label: '使用说明',
+            click: () => {
+              showCopyableDialog({
+                title: '使用说明',
+                message: '系统用法与常见问题',
+                detail: USAGE_INFO
+              });
+            }
+          },
+          {
+            label: '问题反馈',
+            click: () => {
+              showCopyableDialog({
+                title: '问题反馈',
+                message: '反馈途径',
+                detail: FEEDBACK_INFO
+              });
+            }
+          },
+          { type: 'separator' },
+          {
             label: '语言/Language',
             submenu: [
               {
@@ -202,8 +309,7 @@ function setApplicationMenu(language) {
                 }
               }
             ]
-          },
-          { role: 'about', label: '关于' }
+          }
         ]
       }
     ],
@@ -253,6 +359,37 @@ function setApplicationMenu(language) {
         label: 'Help',
         submenu: [
           {
+            label: 'About System',
+            click: () => {
+              showCopyableDialog({
+                title: 'About System',
+                message: 'Required Environment',
+                detail: ENV_INFO
+              });
+            }
+          },
+          {
+            label: 'Usage',
+            click: () => {
+              showCopyableDialog({
+                title: 'Usage',
+                message: 'Usage & FAQ',
+                detail: USAGE_INFO
+              });
+            }
+          },
+          {
+            label: 'Feedback',
+            click: () => {
+              showCopyableDialog({
+                title: 'Feedback',
+                message: 'How to feedback',
+                detail: FEEDBACK_INFO
+              });
+            }
+          },
+          { type: 'separator' },
+          {
             label: 'Language/语言',
             submenu: [
               {
@@ -276,8 +413,7 @@ function setApplicationMenu(language) {
                 }
               }
             ]
-          },
-          { role: 'about' }
+          }
         ]
       }
     ]
@@ -296,6 +432,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     icon: path.join(__dirname, 'E-paper.ico'),
+    title: 'Electron Paper',
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: true,
@@ -339,6 +476,7 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
+  mainWindow.setTitle('Electron Paper');
   
   // 只在开发模式下自动打开开发者工具
   if (isDev) {

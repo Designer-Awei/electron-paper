@@ -314,7 +314,8 @@ electron-paper/
 
 ## 贡献与反馈
 
-欢迎通过GitHub Issues提交反馈和建议。
+欢迎通过GitHub Issues提交反馈和建议
+也可联系作者邮箱：zhangweiwei3099@gmail.com
 
 ## 许可证
 
