@@ -10,7 +10,7 @@
     <style>
         body {
             margin: 0;
-            padding: 24px;
+            padding: 0 24px 24px 24px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             background-color: #f7f9fc;
             color: #333;
@@ -1765,6 +1765,48 @@
         .context-hint.fade-out {
             opacity: 0;
         }
+
+        /* 二级标签导航样式 */
+        .sub-nav-tabs {
+            display: flex;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #e0e0e0;
+            position: relative;
+            width: 100%;
+        }
+        
+        .sub-tab-button {
+            padding: 8px 16px;
+            border: none;
+            background-color: transparent;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s ease;
+            position: relative;
+            margin: 0;
+        }
+        
+        .sub-tab-button:hover {
+            color: #1a73e8;
+        }
+        
+        .sub-tab-button.active {
+            color: #1a73e8;
+            background-color: transparent;
+            font-weight: 600;
+        }
+        
+        .sub-tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: #1a73e8;
+        }
     </style>
 </head>
 <body>
@@ -1817,8 +1859,8 @@
     
     <div class="nav-tabs">
         <button id="mainSearchTab" class="tab-button active">文献检索</button>
-        <button id="historySearchTab" class="tab-button">历史记录</button>
-        <button id="favoritesTab" class="tab-button">收藏夹</button>
+        <button id="historySearchTab" class="tab-button">历史检索</button>
+        <button id="visualHelperTab" class="tab-button">可视化助手</button>
         <button id="knowledgeBaseTab" class="tab-button">本地知识库</button>
         <button id="settingsTab" class="tab-button">系统设置</button>
         <div style="margin-left: auto; display: flex; align-items: center;">
@@ -1882,23 +1924,45 @@
     </div>
 
     <div id="historyContainer" class="search-container" style="display: none; background-color: transparent; box-shadow: none; padding: 0;">
-        <div class="history-title">
-            <span>历史搜索记录</span>
-            <button class="clear-history" id="clearHistory">清空历史</button>
+        <!-- 添加二级标签导航 -->
+        <div class="sub-nav-tabs">
+            <button id="historyRecordsTab" class="sub-tab-button active">检索记录</button>
+            <button id="favoritesRecordsTab" class="sub-tab-button">收藏记录</button>
         </div>
-        <p class="history-tip" style="margin-top: 0; margin-bottom: 16px; color: #666; font-size: 14px;">点击记录可应用搜索条件并返回主搜索页面</p>
-        <div class="history-list" id="historyList">
-            <!-- 历史记录将通过 JavaScript 动态插入 -->
+        
+        <!-- 历史记录内容 -->
+        <div id="historyRecordsContainer">
+            <div class="history-title" style="display: flex; justify-content: space-between; align-items: center; height: 36px;">
+                <span style="font-size: 14px; font-weight: normal;">点击记录可应用搜索条件并返回主搜索页面</span>
+                <button class="clear-history" id="clearHistory">清空历史</button>
+            </div>
+            <div class="history-list" id="historyList">
+                <!-- 历史记录将通过 JavaScript 动态插入 -->
+            </div>
+        </div>
+        
+        <!-- 收藏夹内容 -->
+        <div id="favoritesRecordsContainer" style="display: none;">
+            <div class="history-title" style="display: flex; justify-content: space-between; align-items: center; height: 36px;">
+                <span style="font-size: 14px; font-weight: normal;">点击收藏项可应用搜索条件并返回主搜索页面</span>
+                <div style="visibility: hidden;">
+                    <button class="clear-history" style="visibility: hidden;">占位按钮</button>
+                </div>
+            </div>
+            <div class="history-list" id="favoritesList">
+                <!-- 收藏记录将通过 JavaScript 动态插入 -->
+            </div>
         </div>
     </div>
 
-    <div id="favoritesContainer" class="search-container" style="display: none; background-color: transparent; box-shadow: none; padding: 0;">
-        <div class="history-title">
-            <span>收藏夹</span>
-        </div>
-        <p class="history-tip" style="margin-top: 0; margin-bottom: 16px; color: #666; font-size: 14px;">点击记录可应用搜索条件并返回主搜索页面</p>
-        <div class="history-list" id="favoritesList">
-            <!-- 收藏记录将通过 JavaScript 动态插入 -->
+    <div id="favoritesContainer" style="display: none;">
+        <!-- 此容器不再需要，但保留以避免JavaScript错误 -->
+    </div>
+
+    <!-- 添加可视化助手界面 -->
+    <div id="visualHelperContainer" class="search-container" style="display: none; background-color: transparent; box-shadow: none; padding: 0;">
+        <div style="display: flex; justify-content: center; align-items: center; height: 300px; color: #888; font-size: 16px;">
+            可视化功能开发中，敬请期待...
         </div>
     </div>
 

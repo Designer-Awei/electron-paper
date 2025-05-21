@@ -42,11 +42,13 @@ const historySearchTab = document.getElementById('historySearchTab');
 const favoritesTab = document.getElementById('favoritesTab');
 const settingsTab = document.getElementById('settingsTab');
 const knowledgeBaseTab = document.getElementById('knowledgeBaseTab');
+const visualHelperTab = document.getElementById('visualHelperTab');
 const mainSearchContainer = document.getElementById('mainSearchContainer');
 const historyContainer = document.getElementById('historyContainer');
 const favoritesContainer = document.getElementById('favoritesContainer');
 const settingsContainer = document.getElementById('settingsContainer');
 const knowledgeBaseContainer = document.getElementById('knowledgeBaseContainer');
+const visualHelperContainer = document.getElementById('visualHelperContainer');
 
 // 获取设置相关的DOM元素
 const translateButton = document.getElementById('translateButton');
@@ -818,24 +820,58 @@ document.addEventListener('DOMContentLoaded', () => {
     // 添加导航栏切换事件
     const mainSearchTab = document.getElementById('mainSearchTab');
     const historySearchTab = document.getElementById('historySearchTab');
-    const favoritesTab = document.getElementById('favoritesTab');
+    const settingsTab = document.getElementById('settingsTab');
+    const knowledgeBaseTab = document.getElementById('knowledgeBaseTab');
+    const visualHelperTab = document.getElementById('visualHelperTab');
     const mainSearchContainer = document.getElementById('mainSearchContainer');
     const historyContainer = document.getElementById('historyContainer');
-    const favoritesContainer = document.getElementById('favoritesContainer');
+    const settingsContainer = document.getElementById('settingsContainer');
+    const knowledgeBaseContainer = document.getElementById('knowledgeBaseContainer');
+    const visualHelperContainer = document.getElementById('visualHelperContainer');
     const mainSearchResults = document.getElementById('mainSearchResults');
     
+    // 获取二级标签页元素
+    const historyRecordsTab = document.getElementById('historyRecordsTab');
+    const favoritesRecordsTab = document.getElementById('favoritesRecordsTab');
+    
+    // 获取二级标签页内容容器
+    const historyRecordsContainer = document.getElementById('historyRecordsContainer');
+    const favoritesRecordsContainer = document.getElementById('favoritesRecordsContainer');
+    
+    // 添加二级标签页的点击事件
+    historyRecordsTab.addEventListener('click', () => {
+        historyRecordsTab.classList.add('active');
+        favoritesRecordsTab.classList.remove('active');
+        
+        historyRecordsContainer.style.display = 'block';
+        favoritesRecordsContainer.style.display = 'none';
+        
+        renderSearchHistory();
+    });
+    
+    favoritesRecordsTab.addEventListener('click', () => {
+        historyRecordsTab.classList.remove('active');
+        favoritesRecordsTab.classList.add('active');
+        
+        historyRecordsContainer.style.display = 'none';
+        favoritesRecordsContainer.style.display = 'block';
+        
+        renderFavorites();
+    });
+    
+    // 主标签页点击事件
     mainSearchTab.addEventListener('click', () => {
         mainSearchTab.classList.add('active');
         historySearchTab.classList.remove('active');
-        favoritesTab.classList.remove('active');
         settingsTab.classList.remove('active');
         knowledgeBaseTab.classList.remove('active');
+        visualHelperTab.classList.remove('active');
         
         mainSearchContainer.style.display = 'block';
         historyContainer.style.display = 'none';
-        favoritesContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
         knowledgeBaseContainer.style.display = 'none';
+        visualHelperContainer.style.display = 'none';
         
         // 显示搜索结果区域
         document.getElementById('mainSearchResults').style.display = 'block';
@@ -844,15 +880,15 @@ document.addEventListener('DOMContentLoaded', () => {
     historySearchTab.addEventListener('click', () => {
         mainSearchTab.classList.remove('active');
         historySearchTab.classList.add('active');
-        favoritesTab.classList.remove('active');
         settingsTab.classList.remove('active');
         knowledgeBaseTab.classList.remove('active');
+        visualHelperTab.classList.remove('active');
         
         mainSearchContainer.style.display = 'none';
         historyContainer.style.display = 'block';
-        favoritesContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
         knowledgeBaseContainer.style.display = 'none';
+        visualHelperContainer.style.display = 'none';
         
         // 隐藏搜索结果区域
         document.getElementById('mainSearchResults').style.display = 'none';
@@ -861,38 +897,19 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSearchHistory();
     });
     
-    favoritesTab.addEventListener('click', () => {
-        mainSearchTab.classList.remove('active');
-        historySearchTab.classList.remove('active');
-        favoritesTab.classList.add('active');
-        settingsTab.classList.remove('active');
-        knowledgeBaseTab.classList.remove('active');
-        
-        mainSearchContainer.style.display = 'none';
-        historyContainer.style.display = 'none';
-        favoritesContainer.style.display = 'block';
-        settingsContainer.style.display = 'none';
-        knowledgeBaseContainer.style.display = 'none';
-        
-        // 隐藏搜索结果区域
-        document.getElementById('mainSearchResults').style.display = 'none';
-        
-        // 加载收藏夹
-        renderFavorites();
-    });
-    
     settingsTab.addEventListener('click', () => {
         mainSearchTab.classList.remove('active');
         historySearchTab.classList.remove('active');
-        favoritesTab.classList.remove('active');
         settingsTab.classList.add('active');
         knowledgeBaseTab.classList.remove('active');
+        visualHelperTab.classList.remove('active');
         
         mainSearchContainer.style.display = 'none';
         historyContainer.style.display = 'none';
         favoritesContainer.style.display = 'none';
         settingsContainer.style.display = 'block';
         knowledgeBaseContainer.style.display = 'none';
+        visualHelperContainer.style.display = 'none';
         
         // 隐藏搜索结果区域
         document.getElementById('mainSearchResults').style.display = 'none';
@@ -904,12 +921,13 @@ document.addEventListener('DOMContentLoaded', () => {
     knowledgeBaseTab.addEventListener('click', () => {
         mainSearchTab.classList.remove('active');
         historySearchTab.classList.remove('active');
-        favoritesTab.classList.remove('active');
+        visualHelperTab.classList.remove('active');
         settingsTab.classList.remove('active');
         knowledgeBaseTab.classList.add('active');
         
         mainSearchContainer.style.display = 'none';
         historyContainer.style.display = 'none';
+        visualHelperContainer.style.display = 'none';
         favoritesContainer.style.display = 'none';
         settingsContainer.style.display = 'none';
         knowledgeBaseContainer.style.display = 'block';
@@ -919,6 +937,25 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 加载并渲染知识库
         renderKnowledgeBase();
+    });
+    
+    // 添加可视化助手标签页点击事件
+    visualHelperTab.addEventListener('click', () => {
+        mainSearchTab.classList.remove('active');
+        historySearchTab.classList.remove('active');
+        visualHelperTab.classList.add('active');
+        settingsTab.classList.remove('active');
+        knowledgeBaseTab.classList.remove('active');
+        
+        mainSearchContainer.style.display = 'none';
+        historyContainer.style.display = 'none';
+        visualHelperContainer.style.display = 'block';
+        favoritesContainer.style.display = 'none';
+        settingsContainer.style.display = 'none';
+        knowledgeBaseContainer.style.display = 'none';
+        
+        // 隐藏搜索结果区域
+        document.getElementById('mainSearchResults').style.display = 'none';
     });
     
     // 确保翻译按钮有事件监听
@@ -2114,15 +2151,15 @@ async function loadSettings() {
 mainSearchTab.addEventListener('click', () => {
     mainSearchTab.classList.add('active');
     historySearchTab.classList.remove('active');
-    favoritesTab.classList.remove('active');
     settingsTab.classList.remove('active');
     knowledgeBaseTab.classList.remove('active');
+    visualHelperTab.classList.remove('active');
     
     mainSearchContainer.style.display = 'block';
     historyContainer.style.display = 'none';
-    favoritesContainer.style.display = 'none';
     settingsContainer.style.display = 'none';
     knowledgeBaseContainer.style.display = 'none';
+    visualHelperContainer.style.display = 'none';
     
     // 显示搜索结果区域
     document.getElementById('mainSearchResults').style.display = 'block';
@@ -2131,15 +2168,15 @@ mainSearchTab.addEventListener('click', () => {
 historySearchTab.addEventListener('click', () => {
     mainSearchTab.classList.remove('active');
     historySearchTab.classList.add('active');
-    favoritesTab.classList.remove('active');
     settingsTab.classList.remove('active');
     knowledgeBaseTab.classList.remove('active');
+    visualHelperTab.classList.remove('active');
     
     mainSearchContainer.style.display = 'none';
     historyContainer.style.display = 'block';
-    favoritesContainer.style.display = 'none';
     settingsContainer.style.display = 'none';
     knowledgeBaseContainer.style.display = 'none';
+    visualHelperContainer.style.display = 'none';
     
     // 隐藏搜索结果区域
     document.getElementById('mainSearchResults').style.display = 'none';
@@ -2148,38 +2185,19 @@ historySearchTab.addEventListener('click', () => {
     renderSearchHistory();
 });
 
-favoritesTab.addEventListener('click', () => {
-    mainSearchTab.classList.remove('active');
-    historySearchTab.classList.remove('active');
-    favoritesTab.classList.add('active');
-    settingsTab.classList.remove('active');
-    knowledgeBaseTab.classList.remove('active');
-    
-    mainSearchContainer.style.display = 'none';
-    historyContainer.style.display = 'none';
-    favoritesContainer.style.display = 'block';
-    settingsContainer.style.display = 'none';
-    knowledgeBaseContainer.style.display = 'none';
-    
-    // 隐藏搜索结果区域
-    document.getElementById('mainSearchResults').style.display = 'none';
-    
-    // 加载收藏夹
-    renderFavorites();
-});
-
 settingsTab.addEventListener('click', () => {
     mainSearchTab.classList.remove('active');
     historySearchTab.classList.remove('active');
-    favoritesTab.classList.remove('active');
     settingsTab.classList.add('active');
     knowledgeBaseTab.classList.remove('active');
+    visualHelperTab.classList.remove('active');
     
     mainSearchContainer.style.display = 'none';
     historyContainer.style.display = 'none';
     favoritesContainer.style.display = 'none';
     settingsContainer.style.display = 'block';
     knowledgeBaseContainer.style.display = 'none';
+    visualHelperContainer.style.display = 'none';
     
     // 隐藏搜索结果区域
     document.getElementById('mainSearchResults').style.display = 'none';
@@ -2191,12 +2209,13 @@ settingsTab.addEventListener('click', () => {
 knowledgeBaseTab.addEventListener('click', () => {
     mainSearchTab.classList.remove('active');
     historySearchTab.classList.remove('active');
-    favoritesTab.classList.remove('active');
+    visualHelperTab.classList.remove('active');
     settingsTab.classList.remove('active');
     knowledgeBaseTab.classList.add('active');
     
     mainSearchContainer.style.display = 'none';
     historyContainer.style.display = 'none';
+    visualHelperContainer.style.display = 'none';
     favoritesContainer.style.display = 'none';
     settingsContainer.style.display = 'none';
     knowledgeBaseContainer.style.display = 'block';
@@ -2206,6 +2225,25 @@ knowledgeBaseTab.addEventListener('click', () => {
     
     // 加载并渲染知识库
     renderKnowledgeBase();
+});
+
+// 添加可视化助手标签页点击事件
+visualHelperTab.addEventListener('click', () => {
+    mainSearchTab.classList.remove('active');
+    historySearchTab.classList.remove('active');
+    visualHelperTab.classList.add('active');
+    settingsTab.classList.remove('active');
+    knowledgeBaseTab.classList.remove('active');
+    
+    mainSearchContainer.style.display = 'none';
+    historyContainer.style.display = 'none';
+    visualHelperContainer.style.display = 'block';
+    favoritesContainer.style.display = 'none';
+    settingsContainer.style.display = 'none';
+    knowledgeBaseContainer.style.display = 'none';
+    
+    // 隐藏搜索结果区域
+    document.getElementById('mainSearchResults').style.display = 'none';
 });
 
 // 保存设置按钮事件
