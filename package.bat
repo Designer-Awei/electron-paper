@@ -1,5 +1,5 @@
 @echo off
-chcp 936 > nul
+chcp 65001 > nul
 
 :: 切换到脚本所在目录
 cd /d "%~dp0"
@@ -23,6 +23,43 @@ echo Electron Paper 完整打包工具（管理员模式）
 echo ===================================
 echo.
 
+echo [准备工作] 确保没有相关进程运行...
+echo 检查并关闭所有可能影响打包的进程...
+tasklist | findstr "electron" > nul
+if %ERRORLEVEL% equ 0 (
+    echo 发现electron相关进程，正在结束...
+    taskkill /F /IM "electron.exe" /T 2>nul
+    taskkill /F /IM "Electron.exe" /T 2>nul
+)
+
+tasklist | findstr "node" > nul
+if %ERRORLEVEL% equ 0 (
+    echo 发现node相关进程，正在结束...
+    taskkill /F /IM "node.exe" /T 2>nul
+)
+
+tasklist | findstr "app-builder" > nul
+if %ERRORLEVEL% equ 0 (
+    echo 发现app-builder相关进程，正在结束...
+    taskkill /F /IM "app-builder.exe" /T 2>nul
+)
+
+tasklist | findstr "Electron Paper" > nul
+if %ERRORLEVEL% equ 0 (
+    echo 发现Electron Paper相关进程，正在结束...
+    taskkill /F /IM "Electron Paper.exe" /T 2>nul
+)
+
+:: 额外检查是否有任何打包相关进程
+for %%P in (electron electron-paper electron.exe electron-builder app-builder) do (
+    taskkill /F /IM "%%P.exe" /T 2>nul
+)
+
+echo 等待所有进程完全退出...
+timeout /t 5 /nobreak > nul
+echo 进程清理完成
+echo.
+
 :: 设置国内镜像（环境变量方式）
 echo [设置] 配置国内镜像加速下载...
 set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
@@ -44,16 +81,59 @@ echo.
 echo [步骤1/6] 结束运行中的应用程序进程...
 taskkill /F /IM "Electron Paper.exe" /T 2>nul
 taskkill /F /IM "electron-paper.exe" /T 2>nul
-timeout /t 2 /nobreak > nul
+taskkill /F /IM "electron.exe" /T 2>nul
+taskkill /F /IM "electron-builder.exe" /T 2>nul
+taskkill /F /IM "app-builder.exe" /T 2>nul
+taskkill /F /IM "electron Paper.exe" /T 2>nul
+timeout /t 5 /nobreak > nul
 echo 完成
 echo.
 
 echo [步骤2/6] 清理旧的构建目录...
+
+echo 尝试结束所有可能占用dist目录的进程...
+for %%P in (electron node app-builder electron-builder) do (
+    taskkill /F /IM "%%P.exe" /T 2>nul
+)
+timeout /t 3 /nobreak > nul
+
+echo 特别检查是否有进程占用app.asar文件...
+if exist "dist\win-unpacked\resources\app.asar" (
+    echo 发现app.asar文件，尝试清理...
+    attrib -R "dist\win-unpacked\resources\app.asar" 2>nul
+    del /F /Q "dist\win-unpacked\resources\app.asar" 2>nul
+    
+    if exist "dist\win-unpacked\resources\app.asar" (
+        echo 直接删除app.asar文件失败，尝试强制方式...
+        taskkill /F /IM "electron.exe" /T 2>nul
+        taskkill /F /IM "node.exe" /T 2>nul
+        timeout /t 2 /nobreak > nul
+        
+        del /F /S /Q "dist\win-unpacked\resources\app.asar" 2>nul
+    ) else (
+        echo app.asar文件已成功删除
+    )
+)
+
 if exist "dist" (
     echo 正在删除dist目录...
     rd /s /q "dist" 2>nul
     if %ERRORLEVEL% neq 0 (
         echo 警告: 无法完全删除dist目录，可能有文件被锁定
+        echo 尝试使用强制删除...
+        timeout /t 3 /nobreak > nul
+        rmdir /s /q "dist" 2>nul
+        if %ERRORLEVEL% neq 0 (
+            echo 警告: 强制删除dist目录失败，尝试关闭所有相关进程...
+            taskkill /F /IM "node.exe" /T 2>nul
+            timeout /t 3 /nobreak > nul
+            rmdir /s /q "dist" 2>nul
+            if %ERRORLEVEL% neq 0 (
+                echo 错误: 无法删除dist目录，请手动删除后再试
+                pause
+                exit /b 1
+            )
+        )
     ) else (
         echo 旧的dist目录已删除
     )
@@ -62,6 +142,13 @@ echo 完成
 echo.
 
 echo [步骤3/6] 安装或更新依赖...
+echo 清理electron缓存...
+if exist "%USERPROFILE%\.electron" (
+    rd /s /q "%USERPROFILE%\.electron" 2>nul
+    mkdir "%USERPROFILE%\.electron" 2>nul
+)
+echo electron缓存已清理
+
 echo 设置npm国内镜像...
 call npm config set registry https://registry.npmmirror.com
 
@@ -110,7 +197,7 @@ echo.
 
 echo [步骤6/6] 创建可自定义安装路径的安装程序...
 echo 尝试从国内镜像下载资源...
-call npm run build-nsis
+call npm run build-nsis-force
 if %ERRORLEVEL% neq 0 (
     echo 第一次尝试创建安装程序失败，正在重试...
     
@@ -118,12 +205,27 @@ if %ERRORLEVEL% neq 0 (
     echo 清理npm缓存...
     call npm cache clean --force
     
+    echo 确保所有进程已结束...
+    taskkill /F /IM "electron.exe" /T 2>nul
+    taskkill /F /IM "app-builder.exe" /T 2>nul
+    taskkill /F /IM "node.exe" /T 2>nul
+    
+    echo 等待10秒以确保所有文件解锁...
+    timeout /t 10 /nobreak > nul
+    
+    echo 删除dist目录...
+    rmdir /s /q "dist" 2>nul
+    mkdir "dist" 2>nul
+    
     echo 重新尝试创建安装程序...
     set ELECTRON_BUILDER_OFFLINE=true
-    call npm run build-nsis
+    call npm run build-nsis-force
     
     if %ERRORLEVEL% neq 0 (
-        echo 第二次尝试失败，使用离线方式创建安装程序...
+        echo 第二次尝试失败，尝试直接使用简单打包方式...
+        
+        echo 使用简单打包创建便携版...
+        call npm run dist:simple
         
         echo 创建简易安装程序脚本...
         echo @echo off > "dist\安装Electron Paper.bat"
