@@ -1767,15 +1767,8 @@
 </head>
 <body>
     <!-- 导航栏 -->
-    <div class="nav-container">
-        <div class="nav-left">
-            <h1>跨平台文献助手</h1>
-        </div>
-        <div class="nav-right">
-            <button id="summonAwei" class="summon-button">召唤Awei</button>
-        </div>
-    </div>
-    
+    <!-- 已移除空的nav-container组件 -->
+
     <!-- 添加聊天框组件 -->
     <div id="chatContainer" class="chat-container">
         <div class="chat-header">
@@ -1821,11 +1814,14 @@
     </div>
     
     <div class="nav-tabs">
-        <button id="mainSearchTab" class="tab-button active">外文检索</button>
+        <button id="mainSearchTab" class="tab-button active">文献检索</button>
         <button id="historySearchTab" class="tab-button">历史记录</button>
         <button id="favoritesTab" class="tab-button">收藏夹</button>
-        <button id="settingsTab" class="tab-button">设置</button>
-        <button id="knowledgeBaseTab" class="tab-button">我的知识库</button>
+        <button id="knowledgeBaseTab" class="tab-button">本地知识库</button>
+        <button id="settingsTab" class="tab-button">系统设置</button>
+        <div style="margin-left: auto; display: flex; align-items: center;">
+            <button id="summonAwei" class="summon-button">召唤Awei</button>
+        </div>
     </div>
     
     <div id="mainSearchContainer" class="search-container">
