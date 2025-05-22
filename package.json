@@ -6,10 +6,10 @@
   "scripts": {
     "start": "electron .",
     "dev": "cross-env NODE_ENV=development electron .",
-    "dist:simple": "npx electron-packager . --platform=win32 --arch=x64 --out=dist --overwrite",
+    "dist:simple": "npx electron-packager . --platform=win32 --arch=x64 --out=dist --icon=E-paper.ico --overwrite",
     "build": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_CUSTOM_DIR=28.3.3 electron-packager . --platform=win32 --arch=x64 --out=dist --icon=E-paper.ico --overwrite",
     "build-nsis": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_CUSTOM_DIR=28.3.3 ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npx electron-builder --win --x64",
-    "build-nsis-force": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_CUSTOM_DIR=28.3.3 ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npx electron-builder --win --x64 --overwrite"
+    "build-nsis-force": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_CUSTOM_DIR=28.3.3 ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npx electron-builder --win --x64"
   },
   "keywords": [
     "Electron",

@@ -197,7 +197,7 @@ echo.
 
 echo [步骤6/6] 创建可自定义安装路径的安装程序...
 echo 尝试从国内镜像下载资源...
-call npm run build-nsis-force
+call npm run build-nsis
 if %ERRORLEVEL% neq 0 (
     echo 第一次尝试创建安装程序失败，正在重试...
     
@@ -219,7 +219,7 @@ if %ERRORLEVEL% neq 0 (
     
     echo 重新尝试创建安装程序...
     set ELECTRON_BUILDER_OFFLINE=true
-    call npm run build-nsis-force
+    call npm run build-nsis
     
     if %ERRORLEVEL% neq 0 (
         echo 第二次尝试失败，尝试直接使用简单打包方式...
@@ -227,9 +227,23 @@ if %ERRORLEVEL% neq 0 (
         echo 使用简单打包创建便携版...
         call npm run dist:simple
         
+        REM 重命名输出目录为正确的名称
+        if exist "dist\electron-paper-win32-x64" (
+            echo 重命名输出目录为"win-unpacked"...
+            ren "dist\electron-paper-win32-x64" "win-unpacked"
+        )
+        
+        REM 复制图标文件到程序目录
+        if exist "E-paper.ico" (
+            if exist "dist\win-unpacked" (
+                echo 复制图标文件到应用目录...
+                copy "E-paper.ico" "dist\win-unpacked\" /Y
+            )
+        )
+        
         echo 创建简易安装程序脚本...
         echo @echo off > "dist\安装Electron Paper.bat"
-        echo chcp 936 ^> nul >> "dist\安装Electron Paper.bat"
+        echo chcp 65001 ^> nul >> "dist\安装Electron Paper.bat"
         echo echo 正在安装Electron Paper... >> "dist\安装Electron Paper.bat"
         echo set "INSTALL_DIR=%%ProgramFiles%%\Electron Paper" >> "dist\安装Electron Paper.bat"
         echo set /p INSTALL_DIR=请输入安装路径[默认:%%INSTALL_DIR%%]: >> "dist\安装Electron Paper.bat"
@@ -237,10 +251,10 @@ if %ERRORLEVEL% neq 0 (
         echo echo 正在复制文件... >> "dist\安装Electron Paper.bat"
         echo xcopy "win-unpacked\*" "%%INSTALL_DIR%%\" /E /I /H /Y >> "dist\安装Electron Paper.bat"
         echo echo 创建桌面快捷方式... >> "dist\安装Electron Paper.bat"
-        echo powershell -Command "& {$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut([System.Environment]::GetFolderPath('Desktop') + '\Electron Paper.lnk'); $Shortcut.TargetPath = '%%INSTALL_DIR%%\Electron Paper.exe'; $Shortcut.Save()}" >> "dist\安装Electron Paper.bat"
+        echo powershell -Command "& {$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut([System.Environment]::GetFolderPath('Desktop') + '\Electron Paper.lnk'); $Shortcut.TargetPath = '%%INSTALL_DIR%%\Electron Paper.exe'; $Shortcut.IconLocation = '%%INSTALL_DIR%%\E-paper.ico'; $Shortcut.Save()}" >> "dist\安装Electron Paper.bat"
         echo echo 创建开始菜单快捷方式... >> "dist\安装Electron Paper.bat"
         echo mkdir "%%APPDATA%%\Microsoft\Windows\Start Menu\Programs\Electron Paper" 2^>nul >> "dist\安装Electron Paper.bat"
-        echo powershell -Command "& {$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut([System.Environment]::GetFolderPath('Programs') + '\Electron Paper\Electron Paper.lnk'); $Shortcut.TargetPath = '%%INSTALL_DIR%%\Electron Paper.exe'; $Shortcut.Save()}" >> "dist\安装Electron Paper.bat"
+        echo powershell -Command "& {$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut([System.Environment]::GetFolderPath('Programs') + '\Electron Paper\Electron Paper.lnk'); $Shortcut.TargetPath = '%%INSTALL_DIR%%\Electron Paper.exe'; $Shortcut.IconLocation = '%%INSTALL_DIR%%\E-paper.ico'; $Shortcut.Save()}" >> "dist\安装Electron Paper.bat"
         echo echo 安装完成! >> "dist\安装Electron Paper.bat"
         echo pause >> "dist\安装Electron Paper.bat"
         
