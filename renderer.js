@@ -1768,8 +1768,14 @@ async function translatePapers(papers) {
     translationProgressContainer.appendChild(progressText);
     translationProgressContainer.appendChild(progressBarContainer);
     
-    // 插入到搜索表单和结果表格之间
-    searchForm.parentNode.insertBefore(translationProgressContainer, resultsTable);
+    /**
+     * @description 安全插入翻译进度条，兼容不同DOM结构，避免insertBefore报错
+     */
+    if (resultsTable && resultsTable.parentNode === searchForm) {
+        searchForm.insertBefore(translationProgressContainer, resultsTable);
+    } else {
+        searchForm.appendChild(translationProgressContainer);
+    }
     
     try {
         console.log(`开始翻译${papers.length}篇论文，使用模型: ${selectedModel}`);
@@ -4379,4 +4385,58 @@ searchSuggestionStyles.textContent = `
 }
 `;
 document.head.appendChild(searchSuggestionStyles);
+
+// 图表微调区分割线拖动逻辑
+(function() {
+  /**
+   * @description 图表微调区对话历史区和输入区分割线拖动
+   */
+  const chatFlex = document.getElementById('vhTuneChatFlex');
+  const historyDiv = document.getElementById('vhTuneHistory');
+  const inputDiv = document.getElementById('vhTuneInputArea');
+  const divider = document.getElementById('vhTuneDivider');
+  let dragging = false;
+  let startY = 0;
+  let startHistoryHeight = 0;
+  let startInputHeight = 0;
+  if (divider && historyDiv && inputDiv && chatFlex) {
+    divider.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      dragging = true;
+      divider.classList.add('active');
+      document.body.style.cursor = 'row-resize';
+      startY = e.clientY;
+      startHistoryHeight = historyDiv.offsetHeight;
+      startInputHeight = inputDiv.offsetHeight;
+      document.body.setAttribute('data-resizing', 'true');
+    });
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging) return;
+      e.preventDefault();
+      const delta = e.clientY - startY;
+      const totalHeight = chatFlex.offsetHeight;
+      let newHistoryHeight = startHistoryHeight + delta;
+      let newInputHeight = startInputHeight - delta;
+      // 限制最小高度
+      if (newHistoryHeight < 40) newHistoryHeight = 40;
+      if (newInputHeight < 56) newInputHeight = 56;
+      if (newHistoryHeight + newInputHeight > totalHeight - 10) {
+        newInputHeight = totalHeight - newHistoryHeight;
+      }
+      // 百分比高度
+      const historyPercent = (newHistoryHeight / totalHeight) * 100;
+      const inputPercent = (newInputHeight / totalHeight) * 100;
+      historyDiv.style.flexBasis = historyPercent + '%';
+      inputDiv.style.flexBasis = inputPercent + '%';
+    });
+    document.addEventListener('mouseup', function() {
+      if (dragging) {
+        dragging = false;
+        divider.classList.remove('active');
+        document.body.style.cursor = '';
+        document.body.removeAttribute('data-resizing');
+      }
+    });
+  }
+})();
 

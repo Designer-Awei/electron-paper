@@ -8,6 +8,7 @@ const xml2js = require('xml2js');
 const fs = require('fs');
 const path = require('path');
 const { clipboard } = require('electron');
+const { shell } = require('electron');
 
 /**
  * @description 从arXiv获取论文数据
@@ -809,5 +810,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
             console.error('复制到剪贴板失败:', error);
             return Promise.reject(error);
         }
-    }
+    },
+    /**
+     * @description 打开文件所在文件夹并选中文件
+     * @param {string} fullPath - 文件完整路径
+     */
+    showItemInFolder: (fullPath) => shell.showItemInFolder(fullPath)
 }); 
