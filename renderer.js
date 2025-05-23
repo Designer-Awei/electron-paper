@@ -4440,3 +4440,22 @@ document.head.appendChild(searchSuggestionStyles);
   }
 })();
 
+// 左侧输入区高度自适应（分割线拖动）
+(function() {
+  const inputArea = document.getElementById('vhLeftInputArea');
+  const leftPanel = document.getElementById('vhLeftPanel');
+  if (!inputArea || !leftPanel) return;
+  // 监听分割线拖动，自动调整输入区textarea高度
+  const textarea = inputArea.querySelector('textarea.vh-input');
+  function adjustTextareaHeight() {
+    if (!textarea) return;
+    // 让textarea高度填满输入区
+    textarea.style.height = (inputArea.clientHeight - 24) + 'px'; // 24为padding和按钮空间
+  }
+  // 监听窗口和分区变化
+  window.addEventListener('resize', adjustTextareaHeight);
+  new ResizeObserver(adjustTextareaHeight).observe(inputArea);
+  // 初始调整
+  adjustTextareaHeight();
+})();
+
