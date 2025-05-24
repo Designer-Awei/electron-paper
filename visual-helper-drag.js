@@ -84,90 +84,105 @@
 })();
 
 /**
- * 左侧面板分区横向分割线拖动（上下拖动改变高度占比）
+ * 左侧面板分区横向分割线拖动（百分比高度，flex-basis调整）
+ * @description 拖动分割线时动态调整flex-basis百分比，保证总高度不变
  */
 (function() {
-  const leftPanel = document.getElementById('vhLeftPanel');
-  if (!leftPanel) return;
-  // 获取分区
-  const uploadWrapper = leftPanel.querySelector('.vh-upload-wrapper');
-  const divider1 = leftPanel.children[1]; // 第一个2px分割线
+  const uploadArea = document.getElementById('vhUploadArea');
+  const dividerTop = document.getElementById('vhLeftDividerTop');
   const historyDiv = document.getElementById('vhLeftHistory');
-  const divider2 = leftPanel.children[3]; // 第二个2px分割线
+  const dividerBottom = document.getElementById('vhLeftDividerBottom');
   const inputArea = document.getElementById('vhLeftInputArea');
-  if (!uploadWrapper || !divider1 || !historyDiv || !divider2 || !inputArea) return;
+  const leftFlex = document.querySelector('.vh-left-flex');
+  if (!uploadArea || !dividerTop || !historyDiv || !dividerBottom || !inputArea || !leftFlex) return;
 
-  // 拖动第一个分割线，调整上传区和历史区高度
-  let dragging1 = false;
-  let startY1 = 0;
-  let startUploadHeight = 0;
-  let startHistoryHeight1 = 0;
-  divider1.style.cursor = 'row-resize';
-  divider1.addEventListener('mousedown', function(e) {
+  // 获取当前百分比
+  function getPercents() {
+    const total = leftFlex.clientHeight;
+    const upload = uploadArea.offsetHeight;
+    const history = historyDiv.offsetHeight;
+    const input = inputArea.offsetHeight;
+    return {
+      upload: (upload / total) * 100,
+      history: (history / total) * 100,
+      input: (input / total) * 100
+    };
+  }
+  // 设置百分比
+  function setPercents(upload, history, input) {
+    uploadArea.style.flexBasis = upload + '%';
+    historyDiv.style.flexBasis = history + '%';
+    inputArea.style.flexBasis = input + '%';
+  }
+  // 拖动顶部分割线
+  let draggingTop = false;
+  let startYTop = 0;
+  let startUploadPercent = 0;
+  let startHistoryPercent = 0;
+  dividerTop.addEventListener('mousedown', function(e) {
     e.preventDefault();
-    dragging1 = true;
-    divider1.classList.add('active');
+    draggingTop = true;
+    dividerTop.classList.add('active');
     document.body.style.cursor = 'row-resize';
-    startY1 = e.clientY;
-    startUploadHeight = uploadWrapper.offsetHeight;
-    startHistoryHeight1 = historyDiv.offsetHeight;
+    startYTop = e.clientY;
+    const percents = getPercents();
+    startUploadPercent = percents.upload;
+    startHistoryPercent = percents.history;
     document.body.setAttribute('data-resizing', 'true');
   });
   document.addEventListener('mousemove', function(e) {
-    if (!dragging1) return;
+    if (!draggingTop) return;
     e.preventDefault();
-    const delta = e.clientY - startY1;
-    let newUploadHeight = startUploadHeight + delta;
-    let newHistoryHeight = startHistoryHeight1 - delta;
-    // 限制最小高度
-    if (newUploadHeight < 60) newUploadHeight = 60;
-    if (newHistoryHeight < 40) newHistoryHeight = 40;
-    uploadWrapper.style.flex = `0 0 ${newUploadHeight}px`;
-    uploadWrapper.style.height = `${newUploadHeight}px`;
-    historyDiv.style.flexBasis = `${newHistoryHeight}px`;
+    const total = leftFlex.clientHeight;
+    const delta = ((e.clientY - startYTop) / total) * 100;
+    let newUpload = startUploadPercent + delta;
+    let newHistory = startHistoryPercent - delta;
+    // 限制最小高度百分比
+    if (newUpload < 8) { newHistory += newUpload - 8; newUpload = 8; }
+    if (newHistory < 8) { newUpload += newHistory - 8; newHistory = 8; }
+    const percents = getPercents();
+    setPercents(newUpload, newHistory, percents.input);
   });
   document.addEventListener('mouseup', function() {
-    if (dragging1) {
-      dragging1 = false;
-      divider1.classList.remove('active');
+    if (draggingTop) {
+      draggingTop = false;
+      dividerTop.classList.remove('active');
       document.body.style.cursor = '';
       document.body.removeAttribute('data-resizing');
     }
   });
-
-  // 拖动第二个分割线，调整历史区和输入区高度
-  let dragging2 = false;
-  let startY2 = 0;
-  let startHistoryHeight2 = 0;
-  let startInputHeight = 0;
-  divider2.style.cursor = 'row-resize';
-  divider2.addEventListener('mousedown', function(e) {
+  // 拖动底部分割线
+  let draggingBottom = false;
+  let startYBottom = 0;
+  let startHistoryPercent2 = 0;
+  let startInputPercent = 0;
+  dividerBottom.addEventListener('mousedown', function(e) {
     e.preventDefault();
-    dragging2 = true;
-    divider2.classList.add('active');
+    draggingBottom = true;
+    dividerBottom.classList.add('active');
     document.body.style.cursor = 'row-resize';
-    startY2 = e.clientY;
-    startHistoryHeight2 = historyDiv.offsetHeight;
-    startInputHeight = inputArea.offsetHeight;
+    startYBottom = e.clientY;
+    const percents = getPercents();
+    startHistoryPercent2 = percents.history;
+    startInputPercent = percents.input;
     document.body.setAttribute('data-resizing', 'true');
   });
   document.addEventListener('mousemove', function(e) {
-    if (!dragging2) return;
+    if (!draggingBottom) return;
     e.preventDefault();
-    const delta = e.clientY - startY2;
-    let newHistoryHeight = startHistoryHeight2 + delta;
-    let newInputHeight = startInputHeight - delta;
-    // 限制最小高度
-    if (newHistoryHeight < 40) newHistoryHeight = 40;
-    if (newInputHeight < 56) newInputHeight = 56;
-    historyDiv.style.flexBasis = `${newHistoryHeight}px`;
-    inputArea.style.flex = `0 0 ${newInputHeight}px`;
-    inputArea.style.height = `${newInputHeight}px`;
+    const total = leftFlex.clientHeight;
+    const delta = ((e.clientY - startYBottom) / total) * 100;
+    let newHistory = startHistoryPercent2 + delta;
+    let newInput = startInputPercent - delta;
+    if (newHistory < 8) { newInput += newHistory - 8; newHistory = 8; }
+    if (newInput < 8) { newHistory += newInput - 8; newInput = 8; }
+    const percents = getPercents();
+    setPercents(percents.upload, newHistory, newInput);
   });
   document.addEventListener('mouseup', function() {
-    if (dragging2) {
-      dragging2 = false;
-      divider2.classList.remove('active');
+    if (draggingBottom) {
+      draggingBottom = false;
+      dividerBottom.classList.remove('active');
       document.body.style.cursor = '';
       document.body.removeAttribute('data-resizing');
     }
