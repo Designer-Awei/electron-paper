@@ -222,58 +222,92 @@
   }
 
   /**
-   * 渲染助手消息气泡（支持markdown和代码块）
+   * 渲染助手消息气泡（支持markdown和代码块，完全参考文献助手）
    * @param {string} text 助手回复内容（markdown）
    */
   function renderBotMessage(text) {
-    // 创建气泡div
     const div = document.createElement('div');
     div.className = 'vh-bot-message';
-    // 使用markdown-it渲染
-    if (window.markdownit) {
-      const md = window.markdownit({
-        html: false,
-        linkify: true,
-        breaks: true,
-        highlight: function(str, lang) {
-          if (window.hljs && lang && window.hljs.getLanguage(lang)) {
-            try {
-              return '<pre><code class="hljs ' + lang + '">' + window.hljs.highlight(str, { language: lang }).value + '</code></pre>';
-            } catch (__) {}
-          }
-          return '<pre><code class="hljs">' + md.utils.escapeHtml(str) + '</code></pre>';
+    // 代码块正则
+    const codeBlockRegex = /```([a-zA-Z0-9]*)\n([\s\S]*?)```/g;
+    const inlineCodeRegex = /`([^`]+)`/g;
+    let lastIndex = 0;
+    let match;
+    let hasCodeBlock = false;
+    // 处理多行代码块
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      hasCodeBlock = true;
+      // 添加代码块前的文本（支持markdown-it渲染）
+      if (match.index > lastIndex) {
+        const before = text.substring(lastIndex, match.index);
+        if (window.markdownit) {
+          const md = window.markdownit({ html: false, linkify: true, breaks: true });
+          const html = md.render(before);
+          const temp = document.createElement('div');
+          temp.innerHTML = html;
+          div.appendChild(temp);
+        } else {
+          const temp = document.createElement('div');
+          temp.textContent = before;
+          div.appendChild(temp);
         }
-      });
-      div.innerHTML = md.render(text);
-      // 代码块高亮
-      if (window.hljs) {
-        window.hljs.highlightAll();
       }
-      // 代码块复制按钮
-      setTimeout(() => {
-        div.querySelectorAll('pre').forEach(pre => {
-          const block = pre.querySelector('code');
-          if (!block) return;
-          const copyBtn = document.createElement('button');
-          copyBtn.textContent = '复制';
-          copyBtn.className = 'copy-code-button';
-          copyBtn.style.position = 'absolute';
-          copyBtn.style.top = '6px';
-          copyBtn.style.right = '10px';
-          copyBtn.onclick = function(e) {
-            e.stopPropagation();
-            navigator.clipboard.writeText(block.innerText);
-            copyBtn.textContent = '已复制';
-            setTimeout(() => { copyBtn.textContent = '复制'; }, 1200);
-          };
-          pre.style.position = 'relative';
-          pre.appendChild(copyBtn);
+      // 生成代码块容器
+      const codeContainer = document.createElement('div');
+      codeContainer.className = 'code-block-container';
+      // 头部
+      const codeHeader = document.createElement('div');
+      codeHeader.className = 'code-block-header';
+      // 语言标识
+      const langSpan = document.createElement('span');
+      langSpan.className = 'code-language';
+      langSpan.textContent = match[1] ? match[1] : '代码';
+      codeHeader.appendChild(langSpan);
+      // 复制按钮
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'copy-code-button';
+      copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制';
+      const codeTextToCopy = match[2];
+      copyBtn.onclick = function() {
+        navigator.clipboard.writeText(codeTextToCopy).then(() => {
+          copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+          setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制'; }, 2000);
+        }).catch(() => {
+          copyBtn.innerHTML = '<i class="fas fa-times"></i> 复制失败';
+          setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制'; }, 2000);
         });
-      }, 0);
-    } else {
-      // 无markdown-it时降级为纯文本
-      div.textContent = text;
+      };
+      codeHeader.appendChild(copyBtn);
+      codeContainer.appendChild(codeHeader);
+      // 代码块本体
+      const pre = document.createElement('pre');
+      const code = document.createElement('code');
+      if (match[1]) code.className = 'language-' + match[1];
+      code.textContent = match[2];
+      pre.appendChild(code);
+      codeContainer.appendChild(pre);
+      div.appendChild(codeContainer);
+      lastIndex = match.index + match[0].length;
     }
+    // 处理剩余文本（支持内联代码和markdown-it）
+    if (lastIndex < text.length) {
+      let rest = text.substring(lastIndex);
+      if (window.markdownit) {
+        const md = window.markdownit({ html: false, linkify: true, breaks: true });
+        // 处理内联代码
+        rest = rest.replace(inlineCodeRegex, '<span class="inline-code">$1</span>');
+        const html = md.render(rest);
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        div.appendChild(temp);
+      } else {
+        const temp = document.createElement('div');
+        temp.textContent = rest;
+        div.appendChild(temp);
+      }
+    }
+    // 代码高亮
+    if (window.hljs) setTimeout(() => window.hljs.highlightAll(), 0);
     historyArea.appendChild(div);
     historyArea.scrollTop = historyArea.scrollHeight;
   }
