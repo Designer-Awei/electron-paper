@@ -59,6 +59,7 @@ const cancelApiKeyButton = document.getElementById('cancelApiKey');
 const closeModalButton = document.getElementById('closeModal');
 const settingsApiKey = document.getElementById('settingsApiKey');
 const settingsModelSelection = document.getElementById('settingsModelSelection');
+const settingsChatModelSelection = document.getElementById('settingsChatModelSelection'); // 新增
 const saveSettingsButton = document.getElementById('saveSettingsButton');
 const settingsStatusMessage = document.getElementById('settingsStatusMessage');
 
@@ -2078,14 +2079,20 @@ async function saveSettings() {
         // 获取表单值
         const newApiKey = document.getElementById('settingsApiKey').value.trim();
         const selectedModel = document.getElementById('settingsModelSelection').value;
+        const selectedChatModel = document.getElementById('settingsChatModelSelection').value; // 新增
         const exportPath = document.getElementById('paperExportPath').value;
         
         // 构建设置对象
         const settings = {
             apiKey: newApiKey,
             model: selectedModel,
+            chatModel: selectedChatModel, // 新增
             exportPath: exportPath
         };
+        
+        // 保存到localStorage
+        localStorage.setItem('translationModel', selectedModel);
+        localStorage.setItem('chatModel', selectedChatModel); // 新增
         
         // 保存设置
         const success = await window.electronAPI.saveSettings(settings);
@@ -2117,6 +2124,7 @@ async function loadSettings() {
         // 获取设置表单元素
         const settingsApiKey = document.getElementById('settingsApiKey');
         const settingsModelSelection = document.getElementById('settingsModelSelection');
+        const settingsChatModelSelection = document.getElementById('settingsChatModelSelection'); // 新增
         const paperExportPath = document.getElementById('paperExportPath');
         const knowledgeBasePath = document.getElementById('knowledgeBasePath');
         
@@ -2132,6 +2140,11 @@ async function loadSettings() {
         if (savedModel) {
             settingsModelSelection.value = savedModel;
             lastUsedTranslationModel = savedModel;
+        }
+        // 加载对话&绘图模型设置
+        const savedChatModel = localStorage.getItem('chatModel');
+        if (savedChatModel) {
+            settingsChatModelSelection.value = savedChatModel;
         }
 
         // 加载导出路径设置
@@ -3954,8 +3967,8 @@ async function sendMessage() {
             apiKey = await loadApiKey();
         }
         
-        // 获取当前选择的翻译模型作为聊天模型
-        const model = settingsModelSelection.value || 'deepseek-ai/DeepSeek-V2';
+        // 获取当前选择的对话&绘图模型作为聊天模型
+        const model = settingsChatModelSelection.value || 'THUDM/GLM-4-9B-0414';
         
         if (!apiKey) {
             addMessage('请先在设置中配置SiliconFlow API密钥。', 'bot');

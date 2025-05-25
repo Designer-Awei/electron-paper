@@ -14,8 +14,7 @@
 
   // 图形数据，支持多图形
   const shapes = [
-    { x: 100, y: 100, width: 200, height: 120, selected: false },
-    { x: 400, y: 300, width: 180, height: 140, selected: false }
+    { x: 200, y: 200, width: 200, height: 120, selected: false }
   ];
   let draggingShape = null;
   let dragOffsetX = 0, dragOffsetY = 0;
@@ -72,11 +71,6 @@
       ctx.lineWidth = shape.selected ? 4 : 2;
       ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
       ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-      if (shape.selected) {
-        ctx.font = '18px sans-serif';
-        ctx.fillStyle = '#1976d2';
-        ctx.fillText('已选中', shape.x + 10, shape.y + 30);
-      }
     }
     ctx.restore();
   }

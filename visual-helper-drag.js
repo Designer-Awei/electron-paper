@@ -187,4 +187,267 @@
       document.body.removeAttribute('data-resizing');
     }
   });
+})();
+
+/**
+ * 可视化助手左侧图表生成区对话功能
+ * 支持：发送按钮/回车发送，用户消息右侧绿色气泡，助手回复左侧白色气泡，自动滚动
+ * @author AI
+ */
+(function() {
+  // 全局对话历史
+  let messages = [
+    { role: 'system', content: '你是可视化助手，帮助用户生成和微调数据图表。' }
+  ];
+
+  // 获取开场介绍内容
+  const opening = '你好，我是可视化助手，请告诉我你的绘图需求~';
+
+  // DOM元素
+  const inputArea = document.querySelector('#vhLeftInputArea .vh-input');
+  const sendBtn = document.querySelector('#vhLeftInputArea .vh-send-btn');
+  const historyArea = document.getElementById('vhLeftHistory');
+  if (!inputArea || !sendBtn || !historyArea) return;
+
+  /**
+   * 渲染用户消息气泡
+   * @param {string} text 用户输入内容
+   */
+  function renderUserMessage(text) {
+    const div = document.createElement('div');
+    div.className = 'vh-user-message';
+    div.textContent = text;
+    historyArea.appendChild(div);
+    historyArea.scrollTop = historyArea.scrollHeight;
+  }
+
+  /**
+   * 渲染助手消息气泡（支持markdown和代码块）
+   * @param {string} text 助手回复内容（markdown）
+   */
+  function renderBotMessage(text) {
+    // 创建气泡div
+    const div = document.createElement('div');
+    div.className = 'vh-bot-message';
+    // 使用markdown-it渲染
+    if (window.markdownit) {
+      const md = window.markdownit({
+        html: false,
+        linkify: true,
+        breaks: true,
+        highlight: function(str, lang) {
+          if (window.hljs && lang && window.hljs.getLanguage(lang)) {
+            try {
+              return '<pre><code class="hljs ' + lang + '">' + window.hljs.highlight(str, { language: lang }).value + '</code></pre>';
+            } catch (__) {}
+          }
+          return '<pre><code class="hljs">' + md.utils.escapeHtml(str) + '</code></pre>';
+        }
+      });
+      div.innerHTML = md.render(text);
+      // 代码块高亮
+      if (window.hljs) {
+        window.hljs.highlightAll();
+      }
+      // 代码块复制按钮
+      setTimeout(() => {
+        div.querySelectorAll('pre').forEach(pre => {
+          const block = pre.querySelector('code');
+          if (!block) return;
+          const copyBtn = document.createElement('button');
+          copyBtn.textContent = '复制';
+          copyBtn.className = 'copy-code-button';
+          copyBtn.style.position = 'absolute';
+          copyBtn.style.top = '6px';
+          copyBtn.style.right = '10px';
+          copyBtn.onclick = function(e) {
+            e.stopPropagation();
+            navigator.clipboard.writeText(block.innerText);
+            copyBtn.textContent = '已复制';
+            setTimeout(() => { copyBtn.textContent = '复制'; }, 1200);
+          };
+          pre.style.position = 'relative';
+          pre.appendChild(copyBtn);
+        });
+      }, 0);
+    } else {
+      // 无markdown-it时降级为纯文本
+      div.textContent = text;
+    }
+    historyArea.appendChild(div);
+    historyArea.scrollTop = historyArea.scrollHeight;
+  }
+
+  /**
+   * 获取系统设置页的对话&绘图模型
+   * @returns {string} 模型名
+   */
+  function getChatModel() {
+    const sel = document.getElementById('settingsChatModelSelection');
+    return sel ? sel.value : '';
+  }
+
+  /**
+   * @description 加载API密钥（与文献助手一致）
+   * @returns {Promise<string|null>} API密钥
+   */
+  async function loadApiKey() {
+    try {
+      const key = await window.electronAPI.getApiKey();
+      if (key) {
+        window.apiKey = key;
+      } else {
+        window.apiKey = null;
+      }
+      return window.apiKey;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 调用大模型API，参考文献助手实现
+   * @param {Array} msgList 消息历史
+   * @param {string} model 模型名
+   * @returns {Promise<string>} 助手回复
+   */
+  async function callLLM(msgList, model) {
+    let apiKey = window.apiKey;
+    if (!apiKey) {
+      apiKey = await loadApiKey();
+    }
+    if (!apiKey) {
+      alert('请先在设置中配置SiliconFlow API密钥');
+      return;
+    }
+    try {
+      const res = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + apiKey
+        },
+        body: JSON.stringify({
+          model,
+          messages: msgList,
+          stream: false,
+          max_tokens: 1024,
+          temperature: 0.7,
+          top_p: 0.9
+        })
+      });
+      const data = await res.json();
+      if (data.error) {
+        return 'API错误：' + (data.error.message || JSON.stringify(data.error));
+      }
+      if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+        return data.choices[0].message.content;
+      }
+      return '助手未能理解您的需求，请重试。';
+    } catch (e) {
+      return '网络或API调用异常，请检查API密钥和网络连接。';
+    }
+  }
+
+  /**
+   * 摘要前4轮对话（8条消息）
+   * @param {Array} msgList
+   * @param {string} model
+   * @returns {Promise<string>} 摘要内容
+   */
+  async function summarizeHistory(msgList, model) {
+    // 只摘要前8条（4轮）
+    const summaryPrompt = [
+      { role: 'system', content: '请用简洁中文总结以下对话内容，便于后续AI理解用户需求：' },
+      ...msgList.slice(1, 9)
+    ];
+    const summary = await callLLM(summaryPrompt, model);
+    return summary;
+  }
+
+  /**
+   * 发送消息主流程，带摘要记忆
+   */
+  async function handleSend() {
+    const text = inputArea.value.trim();
+    if (!text) return;
+    renderUserMessage(text);
+    inputArea.value = '';
+    inputArea.disabled = true;
+    renderBotMessage('助手正在思考...');
+    historyArea.scrollTop = historyArea.scrollHeight;
+    const model = getChatModel();
+    // 追加用户消息到历史
+    messages.push({ role: 'user', content: text });
+    // 超过4轮（8条+system=9）自动摘要
+    if (messages.length > 9) {
+      const summary = await summarizeHistory(messages, model);
+      // 用摘要替换前8条
+      messages = [
+        messages[0],
+        { role: 'user', content: '对话摘要：' + summary },
+        ...messages.slice(9)
+      ];
+    }
+    // 调用助手
+    const botReply = await callLLM(messages, model);
+    // 追加助手回复到历史
+    messages.push({ role: 'assistant', content: botReply });
+    // 移除"助手正在思考..."
+    const lastBot = historyArea.querySelector('.vh-bot-message:last-child');
+    if (lastBot && lastBot.textContent === '助手正在思考...') {
+      lastBot.remove();
+    }
+    renderBotMessage(botReply);
+    inputArea.disabled = false;
+    inputArea.focus();
+    historyArea.scrollTop = historyArea.scrollHeight;
+  }
+
+  // 发送按钮事件
+  sendBtn.addEventListener('click', handleSend);
+  // 回车发送
+  inputArea.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  });
+
+  // 清空对话时重置messages
+  const clearBtns = Array.from(document.querySelectorAll('button.secondary-button'));
+  const clearBtn = clearBtns.find(btn => btn.textContent.trim() === '清空对话');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function() {
+      messages = [
+        { role: 'system', content: '你是可视化助手，帮助用户生成和微调数据图表。' }
+      ];
+    });
+  }
+})();
+
+/**
+ * 可视化助手左侧"清空对话"按钮功能：点击后仅保留开场介绍气泡
+ * @author AI
+ */
+(function() {
+  // 选择所有class为secondary-button且内容为"清空对话"的按钮
+  const clearBtns = Array.from(document.querySelectorAll('button.secondary-button'));
+  const clearBtn = clearBtns.find(btn => btn.textContent.trim() === '清空对话');
+  const historyArea = document.getElementById('vhLeftHistory');
+  if (!clearBtn || !historyArea) return;
+
+  // 开场介绍内容（与初始一致，如有变动请同步修改）
+  const opening = '你好，我是可视化助手，请告诉我你的绘图需求~';
+
+  clearBtn.addEventListener('click', function() {
+    // 清空历史
+    historyArea.innerHTML = '';
+    // 重新插入开场介绍气泡
+    const div = document.createElement('div');
+    div.className = 'vh-bot-message';
+    div.textContent = opening;
+    historyArea.appendChild(div);
+    historyArea.scrollTop = 0;
+  });
 })(); 

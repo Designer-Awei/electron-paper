@@ -1942,6 +1942,50 @@
         .vh-send-btn:hover {
           background: #0d62d1;
         }
+        @media (max-width: 900px) {
+          .settings-model-row {
+            flex-direction: column !important;
+            gap: 24px !important;
+          }
+        }
+        /* ...原有样式... */
+        #vhLeftHistory {
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          overflow-y: auto;
+          padding: 8px 0;
+        }
+        .vh-bot-message {
+          align-self: flex-start;
+          background: #fff;
+          color: #222;
+          border-radius: 12px 12px 12px 0;
+          padding: 10px 15px;
+          margin-bottom: 10px;
+          max-width: 75%;
+          font-size: 15px;
+          line-height: 1.6;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+          text-align: justify;
+          word-break: break-word;
+          border: 1px solid #e0e0e0;
+        }
+        .vh-user-message {
+          align-self: flex-end;
+          background: #1aad19;
+          color: #fff;
+          border-radius: 12px 12px 0 12px;
+          padding: 10px 15px;
+          margin-bottom: 10px;
+          max-width: 75%;
+          font-size: 15px;
+          line-height: 1.6;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+          text-align: justify;
+          word-break: break-word;
+          border: 1px solid #c6e5b1;
+        }
     </style>
 </head>
 <body>
@@ -2220,7 +2264,6 @@
                       <div class="vh-export-options" style="display:flex;flex-direction:row;gap:8px;width:100%;flex-wrap:nowrap;">
                         <select style="flex:1 1 35%;min-width:0;max-width:none;padding:4px 4px;">
                           <option>1x</option>
-                          <option>0.5x</option>
                           <option>2x</option>
                           <option>4x</option>
                         </select>
@@ -2239,9 +2282,6 @@
           </div>
         </div>
         <div id="settingsContainer" class="search-container" style="display: none; background-color: transparent; box-shadow: none; padding: 0; flex:1;min-height:0;height:100%;overflow:auto;">
-        <div class="history-title">
-            <span>设置</span>
-        </div>
         <div class="settings-form">
             <div class="form-group">
                 <label for="settingsApiKey">SiliconFlow API 密钥</label>
@@ -2252,18 +2292,41 @@
                 </div>
             </div>
             
-            <div class="form-group">
-                <label for="settingsModelSelection">翻译模型</label>
-                <select id="settingsModelSelection" style="width: 100%; box-sizing: border-box;">
-                    <option value="THUDM/glm-4-9b-chat" selected>THUDM/glm-4-9b-chat (默认，128K文本，更快，免费)</option>
-                    <option value="Qwen/Qwen2.5-7B-Instruct">Qwen/Qwen2.5-7B-Instruct (备选，32K文本，免费)</option>
-                    <option value="Qwen/Qwen2.5-14B-Instruct">Qwen/Qwen2.5-14B-Instruct (备选，32K文本，付费)</option>
-                    <option value="deepseek-ai/DeepSeek-V3">deepseek-ai/DeepSeek-V3 (备选，64k文本，付费)</option>
-                </select>
-                <div class="description">
-                    选择用于翻译的模型。默认使用THUDM/glm-4-9b-chat，速度更快，并支持更长的上下文。不同模型支持的上下文长度和翻译质量各有不同。注意：带有"Pro/"前缀的模型需要付费使用。
+            <div style="display: flex; gap: 40px; width: 100%; flex-wrap: nowrap;" class="settings-model-row">
+                <div class="form-group" style="flex:1 1 0; min-width:0; max-width:none; align-self: flex-start;">
+                    <label for="settingsModelSelection">翻译模型</label>
+                    <select id="settingsModelSelection" style="width: 100%; box-sizing: border-box;">
+                        <option value="THUDM/glm-4-9b-chat" selected>THUDM/glm-4-9b-chat (默认，128K文本，更快，免费)</option>
+                        <option value="Qwen/Qwen2.5-7B-Instruct">Qwen/Qwen2.5-7B-Instruct (备选，32K文本，免费)</option>
+                        <option value="Qwen/Qwen2.5-14B-Instruct">Qwen/Qwen2.5-14B-Instruct (备选，32K文本，付费)</option>
+                        <option value="deepseek-ai/DeepSeek-V3">deepseek-ai/DeepSeek-V3 (备选，64k文本，付费)</option>
+                    </select>
+                    <div class="description">
+                        选择用于翻译的模型，不同模型支持的上下文长度和翻译质量各有不同。
+                    </div>
+                </div>
+                <div class="form-group" style="flex:1 1 0; min-width:0; max-width:none; align-self: flex-end;">
+                    <label for="settingsChatModelSelection">对话&绘图模型</label>
+                    <select id="settingsChatModelSelection" style="width: 100%; box-sizing: border-box;">
+                        <option value="THUDM/glm-4-9b-chat" selected>THUDM/glm-4-9b-chat (默认，128K文本，免费)</option>
+                        <option value="THUDM/GLM-4-9B-0414">THUDM/GLM-4-9B-0414 (32K文本，免费)</option>
+                        <option value="Qwen/Qwen3-8B">Qwen/Qwen3-8B (128K文本，免费)</option>
+                        <option value="Qwen/Qwen3-32B">Qwen/Qwen3-32B (128K文本，付费)</option>
+                        <option value="deepseek-ai/DeepSeek-V3">deepseek-ai/DeepSeek-V3 (64k文本，付费)</option>
+                    </select>
+                    <div class="description">
+                        选择用于对话和绘图的模型。
+                    </div>
                 </div>
             </div>
+            <style>
+            @media (max-width: 900px) {
+              .settings-model-row {
+                flex-direction: column !important;
+                gap: 24px !important;
+              }
+            }
+            </style>
             
             <div class="form-group">
                 <label for="paperExportPath">论文存放地址</label>
