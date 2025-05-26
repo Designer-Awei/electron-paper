@@ -191,7 +191,7 @@
   // 设置最大高度和滚动条样式
   uploadArea.style.overflowY = 'auto';
   uploadArea.style.maxHeight = 'calc(100vh - 120px)'; // 120px为预留顶部空间，可根据实际调整
-  uploadArea.style.minHeight = '180px';
+  uploadArea.style.minHeight = '172px';
 })();
 
 /**
