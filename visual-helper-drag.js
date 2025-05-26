@@ -187,6 +187,11 @@
       document.body.removeAttribute('data-resizing');
     }
   });
+
+  // 设置最大高度和滚动条样式
+  uploadArea.style.overflowY = 'auto';
+  uploadArea.style.maxHeight = 'calc(100vh - 120px)'; // 120px为预留顶部空间，可根据实际调整
+  uploadArea.style.minHeight = '180px';
 })();
 
 /**
@@ -484,4 +489,105 @@
     historyArea.appendChild(div);
     historyArea.scrollTop = 0;
   });
+})();
+
+/**
+ * 数据上传与预览区：支持csv/excel文件拖拽和点击上传，解析后预览前10行
+ */
+(function() {
+  const dropZone = document.getElementById('vhUploadDropZone');
+  const preview = document.getElementById('vhUploadPreview');
+  if (!dropZone || !preview || !window.XLSX) return;
+
+  // 拖拽样式
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#1976d2';
+    dropZone.style.background = '#e3f2fd';
+    dropZone.style.color = '#1976d2';
+  });
+  dropZone.addEventListener('dragleave', e => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#bbb';
+    dropZone.style.background = '#fff';
+    dropZone.style.color = '#888';
+  });
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#bbb';
+    dropZone.style.background = '#fff';
+    dropZone.style.color = '#888';
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+  // 点击上传
+  dropZone.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,.xls,.xlsx';
+    input.onchange = e => {
+      if (input.files && input.files[0]) handleFile(input.files[0]);
+    };
+    input.click();
+  });
+
+  /**
+   * 解析文件并渲染预览
+   * @param {File} file
+   */
+  function handleFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = window.XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = window.XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        renderPreview(json, file.name);
+        // 上传成功后缩小上传框高度
+        dropZone.style.height = '140px';
+      } catch (err) {
+        preview.innerHTML = `<div style='color:#c00;padding:8px;'>文件解析失败: ${err.message}</div>`;
+        dropZone.style.height = '140px';
+      }
+    };
+    reader.onerror = function() {
+      preview.innerHTML = `<div style='color:#c00;padding:8px;'>文件读取失败</div>`;
+      dropZone.style.height = '140px';
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  /**
+   * 渲染表格预览，含删除按钮
+   * @param {Array} json 二维数组
+   * @param {string} fileName 文件名
+   */
+  function renderPreview(json, fileName) {
+    if (!json || !json.length) {
+      preview.innerHTML = `<div style='color:#c00;padding:8px;'>未解析到有效数据</div>`;
+      dropZone.style.height = '140px';
+      return;
+    }
+    const header = json[0];
+    const rows = json.slice(1, 11); // 前10行
+    let html = `<div style='display:flex;align-items:center;justify-content:space-between;font-size:14px;color:#1976d2;margin-bottom:6px;'><span>${fileName} 预览</span><button id='vhUploadRemoveBtn' style='font-size:12px;color:#888;background:none;border:none;cursor:pointer;padding:2px 8px;'>删除</button></div>`;
+    // 计算表格最小宽度，避免字段重叠
+    const minTableWidth = Math.max(header.length * 60, 480);
+    html += `<div style='overflow-x:auto;overflow-y:auto;max-height:220px;'><table style='border-collapse:collapse;width:auto;min-width:${minTableWidth}px;font-size:13px;background:#fff;'>`;
+    html += '<thead><tr>' + header.map(h => `<th style='border:1px solid #eee;padding:4px 8px;background:#f5f5f5;min-width:60px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>${h}</th>`).join('') + '</tr></thead>';
+    html += '<tbody>' + rows.map(row => '<tr>' + header.map((_,i) => `<td style='border:1px solid #eee;padding:4px 8px;min-width:60px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>${row[i] ?? ''}</td>`).join('') + '</tr>').join('') + '</tbody>';
+    html += '</table></div>';
+    if (json.length > 11) html += `<div style='color:#888;font-size:12px;margin-top:4px;'>共${json.length-1}行，仅显示前10行</div>`;
+    preview.innerHTML = html;
+    // 删除按钮事件
+    const removeBtn = document.getElementById('vhUploadRemoveBtn');
+    if (removeBtn) {
+      removeBtn.onclick = function() {
+        preview.innerHTML = '';
+        dropZone.style.height = '140px';
+      };
+    }
+  }
 })(); 
