@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const remote = require('@electron/remote/main');
 const os = require('os');
+const dataAgent = require('./dataAgent.js');
 
 // 初始化remote模块
 remote.initialize();
@@ -14,9 +15,9 @@ remote.initialize();
 let puppeteer;
 try {
   puppeteer = require('puppeteer');
-  console.log('Puppeteer加载成功');
+  console.log('Puppeteer loaded successfully');
 } catch (error) {
-  console.warn('未安装puppeteer，某些网络搜索功能可能不可用。建议执行：npm install puppeteer');
+  console.warn('Puppeteer is not installed. Some web search features may be unavailable. Please run: npm install puppeteer');
   // 不打断程序运行
 }
 
@@ -32,13 +33,15 @@ if (isDev) {
       ignore: [
         'node_modules/**/*',
         'package.json',
-        'package-lock.json'
+        'package-lock.json',
+        'python_env/**/*',
+        'dist/**/*'
       ]
     });
     // 恢复中文消息
-    console.log('热重载已启用，正在监听文件变化...');
+    console.log('Hot reload enabled, watching file changes...');
   } catch (err) { 
-    console.error('热重载配置失败:', err); 
+    console.error('Hot reload configuration failed:', err);
   }
 }
 
@@ -556,6 +559,42 @@ app.whenReady().then(() => {
       console.error('打开外部链接失败:', error);
       return false;
     }
+  });
+
+  // 智能体主流程
+  ipcMain.on('data-agent:run', async (event, params) => {
+    const { sessionId, ...rest } = params;
+    let apiKey = params.apiKey;
+    if (!apiKey) {
+      apiKey = getApiKey();
+    }
+    try {
+      await dataAgent.mainAgent({
+        ...rest,
+        apiKey,
+        sessionId,
+        onStatus: (msg) => event.sender.send('data-agent:status', { sessionId, ...msg })
+      }).then(result => {
+        event.sender.send('data-agent:result', { sessionId, ...result });
+      }).catch(err => {
+        event.sender.send('data-agent:error', { sessionId, error: err.message });
+      });
+    } catch (err) {
+      event.sender.send('data-agent:error', { sessionId, error: err.message });
+    }
+  });
+
+  // 摘要API
+  ipcMain.handle('data-agent:summary', async (event, { messages, model, apiKey }) => {
+    if (typeof dataAgent.callLLM !== 'function') throw new Error('dataAgent.callLLM未导出');
+    const summary = await dataAgent.callLLM({
+      model,
+      apiKey,
+      messages,
+      temperature: 0.3,
+      max_tokens: 512
+    });
+    return summary;
   });
 });
 

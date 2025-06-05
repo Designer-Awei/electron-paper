@@ -196,4 +196,42 @@
 
   // 初始化
   render();
-})(); 
+})();
+
+/**
+ * 可视化助手画布区渲染PNG和绑定figJson
+ * @param {string} pngPath - 本地PNG图片路径
+ * @param {object} figJson - plotly图表json
+ */
+window.renderVisualHelperPngAndFig = function(pngPath, figJson) {
+  const canvas = document.getElementById('mainCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const img = new window.Image();
+  img.onload = function() {
+    // 清空画布
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // 居中自适应绘制
+    let scale = Math.min(canvas.width / img.width, canvas.height / img.height, 1);
+    let drawW = img.width * scale;
+    let drawH = img.height * scale;
+    let dx = (canvas.width - drawW) / 2;
+    let dy = (canvas.height - drawH) / 2;
+    ctx.drawImage(img, dx, dy, drawW, drawH);
+  };
+  img.src = 'file://' + pngPath;
+  window.currentPngPath = pngPath;
+  window.currentFigJson = figJson;
+};
+
+/**
+ * 监听window.currentPngPath和window.currentFigJson变化，自动渲染
+ * 可在plot链路结果返回时调用window.renderVisualHelperPngAndFig(pngPath, figJson)
+ */
+// 由visual-helper-drag.js在plot链路返回时调用
+
+/**
+ * 上传/解析数据后，务必调用window.onVisualHelperDataUpload(jsonData)
+ * 这样全局columns、dataPreview、data才能被后续链路正确使用
+ */
+// ... existing code ... 

@@ -374,3 +374,39 @@ electron-paper/
   - 导出功能实现
 
 每完成一阶段，及时更新本计划进度。 
+
+## 智能体链路重构与集成方案（2025/6/4优化）
+
+### 1. 主流程与链路分流
+- 用户上传数据/输入问题后，首先由意图识别agent判断问题类型（plot/calc/general）。
+- plot类型进入智能绘图链路，calc类型进入智能问答链路，general类型直接LLM回复。
+- 智能体链路只向大模型传递字段名和前几行预览数据，避免token超限，实际数据处理在Python端用pandas。
+
+### 2. 智能绘图链路（plot）
+- 字段提取agent（LLM，输入字段名和预览数据，输出相关字段）
+- 数据处理逻辑agent（LLM，判断数据是否需预处理）
+- 绘图数据计算agent（LLM生成代码，Python执行，失败则进入代码修复agent）
+- 智能绘图agent（LLM生成plotly代码，Python执行，失败则进入代码修复agent）
+- 代码修复agent（LLM，输入错误代码、报错、数据摘要和用户问题，输出修复代码，最多修复三次）
+- Python执行成功后，figure json转png，返回前端
+
+### 3. 智能问答链路（calc）
+- 字段提取agent（LLM，输入字段名和预览数据，输出相关字段）
+- 计算agent（LLM生成代码，Python执行，失败则进入代码修复agent）
+- 代码修复agent（同上，最多3次）
+- 二次组织语言agent（LLM，输入Python结果，输出结构化分析文本）
+
+### 4. general链路
+- LLM直接回复
+
+### 5. 代码修复agent
+- 在dataAgent.js内单独封装，所有链路可复用
+- 每次Python执行失败，自动调用LLM修复，最多3次
+
+### 6. 通信与会话标识
+- 前端与主进程通信均用sessionId标识每次请求，支持多会话并发和链路状态追踪
+
+### 7. 其它约定
+- 大模型调用方式与可视化助手前端完全一致（fetch+API Key）
+- Python调用路径统一为python_env/Scripts/python.exe
+- figure转png直接在dataAgent.js内实现，无需额外脚本

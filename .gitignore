@@ -92,4 +92,6 @@ build/
 
 # 缓存
 .npm/
-.yarn/ 
+.yarn/
+
+python_env/ 

@@ -815,5 +815,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
      * @description 打开文件所在文件夹并选中文件
      * @param {string} fullPath - 文件完整路径
      */
-    showItemInFolder: (fullPath) => shell.showItemInFolder(fullPath)
+    showItemInFolder: (fullPath) => shell.showItemInFolder(fullPath),
+    runDataAgent: (params) => ipcRenderer.send('data-agent:run', params),
+    onDataAgentStatus: (callback) => ipcRenderer.on('data-agent:status', (_, msg) => callback(msg)),
+    onDataAgentResult: (callback) => ipcRenderer.on('data-agent:result', (_, msg) => callback(msg)),
+    onDataAgentError: (callback) => ipcRenderer.on('data-agent:error', (_, msg) => callback(msg)),
+    runDataAgentSummary: (messages, model, apiKey) => ipcRenderer.invoke('data-agent:summary', { messages, model, apiKey }),
+    // 新增：移除所有 data-agent 监听器
+    removeAllDataAgentListeners: () => {
+        ipcRenderer.removeAllListeners('data-agent:result');
+        ipcRenderer.removeAllListeners('data-agent:error');
+    },
 }); 

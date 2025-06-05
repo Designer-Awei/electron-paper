@@ -195,8 +195,8 @@
 })();
 
 /**
- * 可视化助手左侧图表生成区对话功能
- * 支持：发送按钮/回车发送，用户消息右侧绿色气泡，助手回复左侧白色气泡，自动滚动
+ * 可视化助手左侧图表生成区对话功能（重构：统一走dataAgent主流程，保留对话记忆和代码块渲染）
+ * 支持：发送按钮/回车发送，用户消息右侧绿色气泡，助手回复左侧白色气泡，自动滚动，代码块可复制
  * @author AI
  */
 (function() {
@@ -204,15 +204,62 @@
   let messages = [
     { role: 'system', content: '你是可视化助手，帮助用户生成和微调数据图表。' }
   ];
+  // 全局数据缓存
+  let columns = [];
+  let dataPreview = [];
+  let data = [];
+  let model = '';
+  let apiKey = '';
 
-  // 获取开场介绍内容
-  const opening = '你好，我是可视化助手，请告诉我你的绘图需求~';
+  // 在模块顶部声明全局变量
+  let dataAgentResultListener = null;
+  let dataAgentErrorListener = null;
 
   // DOM元素
   const inputArea = document.querySelector('#vhLeftInputArea .vh-input');
   const sendBtn = document.querySelector('#vhLeftInputArea .vh-send-btn');
   const historyArea = document.getElementById('vhLeftHistory');
+  const canvasImg = document.getElementById('mainCanvasImg'); // 假设画布区有img标签
   if (!inputArea || !sendBtn || !historyArea) return;
+
+  /**
+   * 解析上传数据，提取字段名和预览数据
+   * @param {Array} jsonData 上传后的二维数组或对象数组
+   */
+  function handleUploadData(jsonData) {
+    if (!jsonData || !jsonData.length) return;
+    if (Array.isArray(jsonData[0])) {
+      // csv/excel二维数组
+      columns = jsonData[0];
+      dataPreview = jsonData.slice(1, 6).map(row => {
+        const obj = {};
+        columns.forEach((col, i) => obj[col] = row[i]);
+        return obj;
+      });
+      data = jsonData.slice(1).map(row => {
+        const obj = {};
+        columns.forEach((col, i) => obj[col] = row[i]);
+        return obj;
+      });
+    } else {
+      // 对象数组
+      columns = Object.keys(jsonData[0]);
+      dataPreview = jsonData.slice(0, 5);
+      data = jsonData;
+    }
+  }
+  // 假设有上传/解析回调
+  window.onVisualHelperDataUpload = handleUploadData;
+
+  /**
+   * 获取系统设置页的对话&绘图模型和API Key
+   */
+  async function getModelAndApiKey() {
+    const modelSel = document.getElementById('settingsChatModelSelection');
+    model = modelSel ? modelSel.value : '';
+    apiKey = await window.electronAPI.getApiKey();
+    if (!apiKey) apiKey = '';
+  }
 
   /**
    * 渲染用户消息气泡
@@ -227,185 +274,197 @@
   }
 
   /**
-   * 渲染助手消息气泡（支持markdown和代码块，完全参考文献助手）
+   * 渲染助手消息气泡（分离渲染多行代码块与内联代码，参考文献助手addMessage实现）
    * @param {string} text 助手回复内容（markdown）
    */
   function renderBotMessage(text) {
+    // 新增日志输出
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    const preview = (text || '').length > 200 ? (text.slice(0, 200) + '...') : text;
+    console.log(`[图表生成助手] 回复输出（${hh}:${mm}:${ss}）：${preview}`);
     const div = document.createElement('div');
     div.className = 'vh-bot-message';
-    // 代码块正则
-    const codeBlockRegex = /```([a-zA-Z0-9]*)\n([\s\S]*?)```/g;
+    const messageContent = document.createElement('div');
+    messageContent.className = 'message-content';
+    const trimmedText = text.trim();
+    // 1. 优先处理多行代码块
+    const codeBlockRegex = /```([a-zA-Z]*)\n([\s\S]*?)```/g;
     const inlineCodeRegex = /`([^`]+)`/g;
     let lastIndex = 0;
     let match;
     let hasCodeBlock = false;
     // 处理多行代码块
-    while ((match = codeBlockRegex.exec(text)) !== null) {
+    while ((match = codeBlockRegex.exec(trimmedText)) !== null) {
       hasCodeBlock = true;
-      // 添加代码块前的文本（支持markdown-it渲染）
+      // 代码块前的普通文本
       if (match.index > lastIndex) {
-        const before = text.substring(lastIndex, match.index);
-        if (window.markdownit) {
-          const md = window.markdownit({ html: false, linkify: true, breaks: true });
-          const html = md.render(before);
-          const temp = document.createElement('div');
-          temp.innerHTML = html;
-          div.appendChild(temp);
+        const textBefore = trimmedText.substring(lastIndex, match.index);
+        // 处理内联代码
+        if (inlineCodeRegex.test(textBefore)) {
+          let inlineLastIndex = 0;
+          let inlineMatch;
+          let textContent = '';
+          inlineCodeRegex.lastIndex = 0;
+          while ((inlineMatch = inlineCodeRegex.exec(textBefore)) !== null) {
+            if (inlineMatch.index > inlineLastIndex) {
+              textContent += textBefore.substring(inlineLastIndex, inlineMatch.index);
+            }
+            textContent += `<span class="inline-code">${inlineMatch[1]}</span>`;
+            inlineLastIndex = inlineMatch.index + inlineMatch[0].length;
+          }
+          if (inlineLastIndex < textBefore.length) {
+            textContent += textBefore.substring(inlineLastIndex);
+          }
+          const textNode = document.createElement('div');
+          textNode.innerHTML = textContent;
+          messageContent.appendChild(textNode);
         } else {
-          const temp = document.createElement('div');
-          temp.textContent = before;
-          div.appendChild(temp);
+          const textNode = document.createElement('div');
+          textNode.textContent = textBefore;
+          messageContent.appendChild(textNode);
         }
       }
-      // 生成代码块容器
+      // 代码块本体
       const codeContainer = document.createElement('div');
       codeContainer.className = 'code-block-container';
-      // 头部
       const codeHeader = document.createElement('div');
       codeHeader.className = 'code-block-header';
-      // 语言标识
-      const langSpan = document.createElement('span');
-      langSpan.className = 'code-language';
-      langSpan.textContent = match[1] ? match[1] : '代码';
-      codeHeader.appendChild(langSpan);
+      const languageSpan = document.createElement('span');
+      languageSpan.className = 'code-language';
+      const language = match[1].trim() || '代码';
+      languageSpan.textContent = language;
+      codeHeader.appendChild(languageSpan);
       // 复制按钮
-      const copyBtn = document.createElement('button');
-      copyBtn.className = 'copy-code-button';
-      copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制';
+      const copyButton = document.createElement('button');
+      copyButton.className = 'copy-code-button';
+      copyButton.textContent = '复制';
       const codeTextToCopy = match[2];
-      copyBtn.onclick = function() {
-        navigator.clipboard.writeText(codeTextToCopy).then(() => {
-          copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
-          setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制'; }, 2000);
-        }).catch(() => {
-          copyBtn.innerHTML = '<i class="fas fa-times"></i> 复制失败';
-          setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制'; }, 2000);
-        });
+      copyButton.onclick = function() {
+        if (window.electronAPI && window.electronAPI.copyToClipboard) {
+          window.electronAPI.copyToClipboard(codeTextToCopy)
+            .then(() => {
+              copyButton.textContent = '已复制';
+              setTimeout(() => { copyButton.textContent = '复制'; }, 2000);
+            })
+            .catch(err => {
+              console.error('复制失败:', err);
+              copyButton.textContent = '复制失败';
+              setTimeout(() => { copyButton.textContent = '复制'; }, 2000);
+            });
+        } else {
+          // 回退方案
+          try {
+            const textArea = document.createElement('textarea');
+            textArea.value = codeTextToCopy;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            textArea.style.top = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            if (successful) {
+              copyButton.textContent = '已复制';
+            } else {
+              copyButton.textContent = '复制失败';
+            }
+            setTimeout(() => { copyButton.textContent = '复制'; }, 2000);
+          } catch (err) {
+            console.error('复制失败:', err);
+            copyButton.textContent = '复制失败';
+            setTimeout(() => { copyButton.textContent = '复制'; }, 2000);
+          }
+        }
       };
-      codeHeader.appendChild(copyBtn);
+      codeHeader.appendChild(copyButton);
       codeContainer.appendChild(codeHeader);
-      // 代码块本体
-      const pre = document.createElement('pre');
+      // 代码块内容
+      const codeBlock = document.createElement('pre');
       const code = document.createElement('code');
-      if (match[1]) code.className = 'language-' + match[1];
+      if (language && language !== '代码') {
+        code.className = `language-${language}`;
+      }
       code.textContent = match[2];
-      pre.appendChild(code);
-      codeContainer.appendChild(pre);
-      div.appendChild(codeContainer);
+      codeBlock.appendChild(code);
+      codeContainer.appendChild(codeBlock);
+      messageContent.appendChild(codeContainer);
       lastIndex = match.index + match[0].length;
     }
-    // 处理剩余文本（支持内联代码和markdown-it）
-    if (lastIndex < text.length) {
-      let rest = text.substring(lastIndex);
-      if (window.markdownit) {
-        const md = window.markdownit({ html: false, linkify: true, breaks: true });
-        // 处理内联代码
-        rest = rest.replace(inlineCodeRegex, '<span class="inline-code">$1</span>');
-        const html = md.render(rest);
-        const temp = document.createElement('div');
-        temp.innerHTML = html;
-        div.appendChild(temp);
+    // 处理最后一段剩余文本
+    if (lastIndex < trimmedText.length) {
+      const remainingText = trimmedText.substring(lastIndex);
+      if (inlineCodeRegex.test(remainingText)) {
+        let inlineLastIndex = 0;
+        let inlineMatch;
+        let textContent = '';
+        inlineCodeRegex.lastIndex = 0;
+        while ((inlineMatch = inlineCodeRegex.exec(remainingText)) !== null) {
+          if (inlineMatch.index > inlineLastIndex) {
+            textContent += remainingText.substring(inlineLastIndex, inlineMatch.index);
+          }
+          textContent += `<span class="inline-code">${inlineMatch[1]}</span>`;
+          inlineLastIndex = inlineMatch.index + inlineMatch[0].length;
+        }
+        if (inlineLastIndex < remainingText.length) {
+          textContent += remainingText.substring(inlineLastIndex);
+        }
+        const textNode = document.createElement('div');
+        textNode.innerHTML = textContent;
+        messageContent.appendChild(textNode);
       } else {
-        const temp = document.createElement('div');
-        temp.textContent = rest;
-        div.appendChild(temp);
+        const textNode = document.createElement('div');
+        textNode.textContent = remainingText;
+        messageContent.appendChild(textNode);
       }
     }
-    // 代码高亮
-    if (window.hljs) setTimeout(() => window.hljs.highlightAll(), 0);
+    // 如果没有代码块但有内联代码，直接用span渲染内联代码
+    if (!hasCodeBlock && inlineCodeRegex.test(trimmedText)) {
+      let inlineLastIndex = 0;
+      let inlineMatch;
+      let textContent = '';
+      inlineCodeRegex.lastIndex = 0;
+      while ((inlineMatch = inlineCodeRegex.exec(trimmedText)) !== null) {
+        if (inlineMatch.index > inlineLastIndex) {
+          textContent += trimmedText.substring(inlineLastIndex, inlineMatch.index);
+        }
+        textContent += `<span class="inline-code">${inlineMatch[1]}</span>`;
+        inlineLastIndex = inlineMatch.index + inlineMatch[0].length;
+      }
+      if (inlineLastIndex < trimmedText.length) {
+        textContent += trimmedText.substring(inlineLastIndex);
+      }
+      messageContent.innerHTML = textContent;
+    }
+    div.appendChild(messageContent);
     historyArea.appendChild(div);
     historyArea.scrollTop = historyArea.scrollHeight;
   }
 
   /**
-   * 获取系统设置页的对话&绘图模型
-   * @returns {string} 模型名
-   */
-  function getChatModel() {
-    const sel = document.getElementById('settingsChatModelSelection');
-    return sel ? sel.value : '';
-  }
-
-  /**
-   * @description 加载API密钥（与文献助手一致）
-   * @returns {Promise<string|null>} API密钥
-   */
-  async function loadApiKey() {
-    try {
-      const key = await window.electronAPI.getApiKey();
-      if (key) {
-        window.apiKey = key;
-      } else {
-        window.apiKey = null;
-      }
-      return window.apiKey;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * 调用大模型API，参考文献助手实现
-   * @param {Array} msgList 消息历史
-   * @param {string} model 模型名
-   * @returns {Promise<string>} 助手回复
-   */
-  async function callLLM(msgList, model) {
-    let apiKey = window.apiKey;
-    if (!apiKey) {
-      apiKey = await loadApiKey();
-    }
-    if (!apiKey) {
-      alert('请先在设置中配置SiliconFlow API密钥');
-      return;
-    }
-    try {
-      const res = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + apiKey
-        },
-        body: JSON.stringify({
-          model,
-          messages: msgList,
-          stream: false,
-          max_tokens: 1024,
-          temperature: 0.7,
-          top_p: 0.9
-        })
-      });
-      const data = await res.json();
-      if (data.error) {
-        return 'API错误：' + (data.error.message || JSON.stringify(data.error));
-      }
-      if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
-        return data.choices[0].message.content;
-      }
-      return '助手未能理解您的需求，请重试。';
-    } catch (e) {
-      return '网络或API调用异常，请检查API密钥和网络连接。';
-    }
-  }
-
-  /**
-   * 摘要前4轮对话（8条消息）
+   * 摘要前3轮对话（6条消息）
    * @param {Array} msgList
    * @param {string} model
    * @returns {Promise<string>} 摘要内容
    */
   async function summarizeHistory(msgList, model) {
-    // 只摘要前8条（4轮）
+    // 只摘要前6条（3轮）
     const summaryPrompt = [
       { role: 'system', content: '请用简洁中文总结以下对话内容，便于后续AI理解用户需求：' },
-      ...msgList.slice(1, 9)
+      ...msgList.slice(1, 7)
     ];
-    const summary = await callLLM(summaryPrompt, model);
+    // 这里直接用dataAgent的callLLM
+    const summary = await window.electronAPI.runDataAgentSummary(summaryPrompt, model, apiKey);
     return summary;
   }
 
   /**
-   * 发送消息主流程，带摘要记忆
+   * 发送消息主流程，带摘要记忆，统一走dataAgent
+   * 注意：发送给意图识别等agent的question参数始终为最新用户输入，不附带历史记忆
+   * 每次请求都自动生成新的 sessionId，避免热重载后会话id失效
    */
   async function handleSend() {
     const text = inputArea.value.trim();
@@ -415,32 +474,112 @@
     inputArea.disabled = true;
     renderBotMessage('助手正在思考...');
     historyArea.scrollTop = historyArea.scrollHeight;
-    const model = getChatModel();
+    await getModelAndApiKey();
     // 追加用户消息到历史
     messages.push({ role: 'user', content: text });
-    // 超过4轮（8条+system=9）自动摘要
-    if (messages.length > 9) {
+    // 检查apiKey
+    if (!apiKey) {
+      // 移除"助手正在思考..."气泡
+      const botMessages = historyArea.querySelectorAll('.vh-bot-message');
+      botMessages.forEach(msg => { if (msg.textContent === '助手正在思考...') msg.remove(); });
+      renderBotMessage('请先在系统设置中配置SiliconFlow API密钥。');
+      inputArea.disabled = false;
+      inputArea.focus();
+      historyArea.scrollTop = historyArea.scrollHeight;
+      return;
+    }
+    // 超过3轮（6条+system=7）自动摘要
+    if (messages.length > 7) {
       const summary = await summarizeHistory(messages, model);
-      // 用摘要替换前8条
+      // 用摘要替换前6条
       messages = [
         messages[0],
         { role: 'user', content: '对话摘要：' + summary },
-        ...messages.slice(9)
+        ...messages.slice(7)
       ];
     }
-    // 调用助手
-    const botReply = await callLLM(messages, model);
-    // 追加助手回复到历史
-    messages.push({ role: 'assistant', content: botReply });
-    // 移除"助手正在思考..."
-    const lastBot = historyArea.querySelector('.vh-bot-message:last-child');
-    if (lastBot && lastBot.textContent === '助手正在思考...') {
-      lastBot.remove();
+    // 每次请求都生成新的 sessionId，避免热重载后会话id失效
+    const sessionId = Date.now().toString() + Math.random().toString(36).slice(2, 8);
+    // 发送前彻底移除所有监听器，防止多次注册
+    if (window.electronAPI.removeAllDataAgentListeners) {
+      window.electronAPI.removeAllDataAgentListeners();
     }
-    renderBotMessage(botReply);
-    inputArea.disabled = false;
-    inputArea.focus();
-    historyArea.scrollTop = historyArea.scrollHeight;
+    // 只传递最新用户输入给智能体主流程（如意图识别agent等）
+    window.electronAPI.runDataAgent({
+      sessionId,
+      question: text, // 始终为最新用户输入
+      columns,
+      dataPreview,
+      data,
+      model,
+      apiKey
+    });
+    // 监听链路状态
+    window.electronAPI.onDataAgentStatus(function(msg) {
+      // 可根据msg.type/status渲染进度
+    });
+    // 注册新的监听器
+    dataAgentResultListener = function({ sessionId: sid, figJson, pngPath, result, analysis, answer }) {
+      // 移除"助手正在思考..."气泡
+      const lastBot = historyArea.querySelector('.vh-bot-message:last-child');
+      if (lastBot && lastBot.textContent === '助手正在思考...') {
+        lastBot.remove();
+      }
+      if (pngPath) {
+        // 渲染到画布
+        if (canvasImg) canvasImg.src = 'file://' + pngPath;
+        window.currentFigJson = figJson;
+        renderBotMessage('已为你生成图表，支持下载PNG/SVG/HTML。');
+      } else if (analysis) {
+        renderBotMessage(analysis);
+      } else if (answer) {
+        renderBotMessage(answer);
+      } else if (result) {
+        renderBotMessage(JSON.stringify(result));
+      }
+      // 追加助手回复到历史
+      if (analysis) {
+        messages.push({ role: 'assistant', content: analysis });
+      } else if (answer) {
+        messages.push({ role: 'assistant', content: answer });
+      }
+      inputArea.disabled = false;
+      inputArea.focus();
+      historyArea.scrollTop = historyArea.scrollHeight;
+      // 监听到一次后立即移除监听器
+      if (window.electronAPI.removeAllDataAgentListeners) {
+        window.electronAPI.removeAllDataAgentListeners();
+      }
+      dataAgentResultListener = null;
+    };
+    window.electronAPI.onDataAgentResult(dataAgentResultListener);
+    window.electronAPI.__vhResultListener = dataAgentResultListener;
+    dataAgentErrorListener = function({ sessionId: sid, error }) {
+      // 移除所有"助手正在思考..."气泡
+      const botMessages = historyArea.querySelectorAll('.vh-bot-message');
+      botMessages.forEach(msg => {
+        if (msg.textContent === '助手正在思考...') msg.remove();
+      });
+      // 检查是否已存在错误气泡，避免重复渲染
+      const lastBot = historyArea.querySelector('.vh-bot-message:last-child');
+      if (lastBot && lastBot.textContent && lastBot.textContent.startsWith('智能体链路出错：')) {
+        // 已有错误气泡，不再重复渲染
+        inputArea.disabled = false;
+        inputArea.focus();
+        historyArea.scrollTop = historyArea.scrollHeight;
+        return;
+      }
+      renderBotMessage('智能体链路出错：' + error);
+      inputArea.disabled = false;
+      inputArea.focus();
+      historyArea.scrollTop = historyArea.scrollHeight;
+      if (window.electronAPI.removeAllDataAgentListeners) {
+        window.electronAPI.removeAllDataAgentListeners();
+      }
+      dataAgentErrorListener = null;
+    };
+    window.electronAPI.onDataAgentError(dataAgentErrorListener);
+    window.electronAPI.__vhErrorListener = dataAgentErrorListener;
   }
 
   // 发送按钮事件
@@ -461,34 +600,14 @@
       messages = [
         { role: 'system', content: '你是可视化助手，帮助用户生成和微调数据图表。' }
       ];
+      historyArea.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'vh-bot-message';
+      div.textContent = '你好，我是可视化助手，请告诉我你的绘图需求~';
+      historyArea.appendChild(div);
+      historyArea.scrollTop = 0;
     });
   }
-})();
-
-/**
- * 可视化助手左侧"清空对话"按钮功能：点击后仅保留开场介绍气泡
- * @author AI
- */
-(function() {
-  // 选择所有class为secondary-button且内容为"清空对话"的按钮
-  const clearBtns = Array.from(document.querySelectorAll('button.secondary-button'));
-  const clearBtn = clearBtns.find(btn => btn.textContent.trim() === '清空对话');
-  const historyArea = document.getElementById('vhLeftHistory');
-  if (!clearBtn || !historyArea) return;
-
-  // 开场介绍内容（与初始一致，如有变动请同步修改）
-  const opening = '你好，我是可视化助手，请告诉我你的绘图需求~';
-
-  clearBtn.addEventListener('click', function() {
-    // 清空历史
-    historyArea.innerHTML = '';
-    // 重新插入开场介绍气泡
-    const div = document.createElement('div');
-    div.className = 'vh-bot-message';
-    div.textContent = opening;
-    historyArea.appendChild(div);
-    historyArea.scrollTop = 0;
-  });
 })();
 
 /**
@@ -546,7 +665,9 @@
         const json = window.XLSX.utils.sheet_to_json(sheet, { header: 1 });
         renderPreview(json, file.name);
         // 上传成功后缩小上传框高度
-        dropZone.style.height = '140px';
+        dropZone.style.height = '80px';
+        // 关键：通知全局数据已上传
+        window.onVisualHelperDataUpload(json);
       } catch (err) {
         preview.innerHTML = `<div style='color:#c00;padding:8px;'>文件解析失败: ${err.message}</div>`;
         dropZone.style.height = '140px';
@@ -572,7 +693,10 @@
     }
     const header = json[0];
     const rows = json.slice(1, 11); // 前10行
-    let html = `<div style='display:flex;align-items:center;justify-content:space-between;font-size:14px;color:#1976d2;margin-bottom:6px;'><span>${fileName} 预览</span><button id='vhUploadRemoveBtn' style='font-size:12px;color:#888;background:none;border:none;cursor:pointer;padding:2px 8px;'>删除</button></div>`;
+    let html = `<div style='display:flex;align-items:center;justify-content:space-between;font-size:14px;color:#1976d2;margin-bottom:6px;'>`;
+    html += `<span style='max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;'>${fileName} 预览</span>`;
+    html += `<button id='vhUploadRemoveBtn' style='font-size:13px;color:#fff;background:#1976d2;border:none;border-radius:6px;padding:2px 16px;cursor:pointer;white-space:nowrap;line-height:1.8;min-width:44px;box-shadow:0 1px 2px rgba(0,0,0,0.04);transition:background 0.2s;'>删除</button>`;
+    html += `</div>`;
     // 计算表格最小宽度，避免字段重叠
     const minTableWidth = Math.max(header.length * 60, 480);
     html += `<div style='overflow-x:auto;overflow-y:auto;max-height:220px;'><table style='border-collapse:collapse;width:auto;min-width:${minTableWidth}px;font-size:13px;background:#fff;'>`;
