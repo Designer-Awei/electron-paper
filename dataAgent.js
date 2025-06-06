@@ -124,99 +124,77 @@ async function detectIntent({ question, model = DEFAULT_MODEL, apiKey }) {
 
 // ========== 智能绘图 ==========
 /**
- * 智能绘图主流程（复刻/api/visualization/create/route.ts，支持多agent链路、自动修复、详细日志、会话id、sse-like进度回调）
+ * 代码生成agent
  * @param {Object} params
  * @param {string} params.question 用户问题
- * @param {any[]} params.data 数据
- * @param {string} [params.model] LLM模型名
- * @param {string} [params.sessionId] 会话唯一id（可选）
- * @param {(event: {type: string, agent?: string, status?: string, data?: any, error?: any}) => void} [params.onStatus] 进度/状态回调（可选）
- * @returns {Promise<{answer: string, plotly_figure: any, sessionId: string}>}
+ * @param {string[]} params.plotFields 字段名
+ * @param {any[]} params.plotData 数据切片
+ * @param {string} params.model LLM模型名
+ * @param {string} params.apiKey API密钥
+ * @returns {Promise<string>} Python代码
  */
-async function createVisualization({ question, data, model = DEFAULT_MODEL, sessionId, onStatus }) {
-  // 生成唯一会话id
-  const sid = sessionId || Date.now().toString() + Math.random().toString(36).slice(2, 8)
-  function emit(event) { if (typeof onStatus === 'function') onStatus(event) }
-  emit({ type: 'open', data: { message: `会话已建立: ${sid}` } })
-  try {
-    emit({ type: 'start', data: { message: '开始处理绘图请求' } })
-    // 1. 字段提取agent
-    emit({ type: 'agent_status', agent: '字段提取agent', status: 'running' })
-    const { plotFields, plotData } = await extractPlotFieldsAndData(question, data, model)
-    console.log(`[字段提取agent] 提取字段:`, plotFields)
-    emit({ type: 'agent_status', agent: '字段提取agent', status: 'success', data: plotFields })
-    if (!plotFields.length) throw new Error('未能识别出可用字段')
-    // 2. 数据处理逻辑agent
-    emit({ type: 'agent_status', agent: '数据处理逻辑agent', status: 'running' })
-    const dataStatus = await detectPlotDataStatus(question, plotFields, plotData, model)
-    console.log(`[数据处理逻辑agent] 状态:`, dataStatus)
-    emit({ type: 'agent_status', agent: '数据处理逻辑agent', status: 'success', data: dataStatus })
-    let finalPlotData = data
-    // 3. 绘图数据计算agent
-    if (dataStatus === 'todo' || dataStatus === 'both') {
-      emit({ type: 'agent_status', agent: '绘图数据计算agent', status: 'running' })
-      try {
-        finalPlotData = await calcPlotDataWithLLM(question, data, model)
-        emit({ type: 'agent_status', agent: '绘图数据计算agent', status: 'success', data: '数据计算完成' })
-      } catch (e) {
-        emit({ type: 'agent_status', agent: '代码修复agent', status: 'running' })
-        try {
-          finalPlotData = await autoFixWithCodeRepairAgent({
-            userQuestion: question,
-            plotData: data,
-            lastCode: '',
-            errorMsg: getErrorMsg(e),
-            model,
-            maxRetry: 3,
-            runCodeFn: runCodeWithAutoFieldCheck
-          })
-          emit({ type: 'agent_status', agent: '代码修复agent', status: 'success' })
-        } catch (fixErr) {
-          emit({ type: 'agent_status', agent: '代码修复agent', status: 'error', error: String(fixErr) })
-          emit({ type: 'error', error: '[绘图数据计算agent] 数据二次计算及修复均失败', data: String(fixErr) })
-          throw fixErr
-        }
-      }
+async function plotCodeAgent({ question, plotFields, plotData, model, apiKey }) {
+  /**
+   * JSDoc: 生成Python绘图代码
+   * - 只输出一段完整的Python代码（只允许使用seaborn或matplotlib，且优先使用seaborn。结尾plt.savefig('output.png', ...)），禁止plt.show()。
+   * - 不包裹为JSON，不输出多余解释。
+   */
+  const prompt = `你是一名专业的数据可视化代码生成助手。请根据下方用户问题、字段名和数据切片，自动推理最适合的数据可视化方案，只输出一段完整的Python绘图代码（只允许使用seaborn或matplotlib，且优先使用seaborn。结尾必须是plt.savefig('output.png', ...)），禁止plt.show()，不要输出多余解释。只能用如下字段：${plotFields.join('、')}。数据示例：${JSON.stringify(plotData.slice(0,5), null, 2)}。用户问题：${question}`;
+  const res = await callLLMWithRetry({
+    model,
+    apiKey,
+    messages: [
+      { role: 'system', content: '你是一名专业的数据可视化代码生成助手。只输出一段完整的Python绘图代码，禁止输出多余解释或JSON包裹。' },
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0.3,
+    max_tokens: 1024,
+    top_p: 0.9,
+    frequency_penalty: 0.3
+  });
+  // 直接返回原始内容，由后续逻辑解析python_code
+  return res.choices[0]?.message?.content || '';
+}
+
+/**
+ * 代码修复agent
+ * @param {Object} params
+ * @param {string} params.code 上次Python代码
+ * @param {string} params.error 报错信息
+ * @param {any[]} params.dataPreview 数据切片
+ * @param {string} params.question 用户问题
+ * @param {string} params.model LLM模型名
+ * @param {string} params.apiKey API密钥
+ * @param {number} [params.maxRetry=3] 最大重试次数
+ * @param {function} [params.onStatus] 状态回调
+ * @returns {Promise<string>} 修正后的Python代码
+ */
+async function codeRepairAgent({ code, error, dataPreview, question, model, apiKey, maxRetry = 3, onStatus, fields }) {
+  let fixed = code;
+  for (let i = 0; i < maxRetry; i++) {
+    // 如果报错涉及全df聚合，自动补充提示
+    let extraTip = '';
+    if (/UFuncNoLoopError|must be str, not int|cannot perform|not supported between/.test(error)) {
+      extraTip = '\n【重要提示】只能对后端传入的字段数组fields做聚合，不能对全df做max()/min()/sum()等操作。';
     }
-    // 4. 智能绘图agent
-    emit({ type: 'agent_status', agent: '智能绘图agent', status: 'running' })
-    const dataPreview = finalPlotData.slice(0, 5)
-    const systemPrompt = buildUniversalPlotSystemPrompt(plotFields, dataPreview, question)
-    emit({ type: 'agent_status', agent: '智能绘图agent', status: 'success', data: systemPrompt })
-    // 5. 智能代码生成agent
-    emit({ type: 'agent_status', agent: '智能代码生成agent', status: 'running' })
-    let llmCode = await callCodeGenAgent(systemPrompt, question, model)
-    if (!llmCode || hasNoResultDefinition(llmCode)) {
-      emit({ type: 'agent_status', agent: '智能代码生成agent', status: 'error', error: 'LLM未能生成有效的plotly代码（缺少result定义）' })
-      emit({ type: 'error', error: 'LLM未能生成有效的plotly代码（缺少result定义）' })
-      throw new Error('LLM未能生成有效的plotly代码（缺少result定义）')
-    }
-    emit({ type: 'agent_status', agent: '智能代码生成agent', status: 'success' })
-    // 6. 执行plotly代码，失败则自动修复
-    let plotly_figure = null
-    try {
-      emit({ type: 'agent_status', agent: '智能绘图执行', status: 'running' })
-      plotly_figure = await autoFixWithCodeRepairAgent({
-        userQuestion: question,
-        plotData: finalPlotData,
-        lastCode: llmCode,
-        errorMsg: '',
-        model,
-        maxRetry: 3,
-        runCodeFn: runCodeWithAutoFieldCheck
-      })
-      emit({ type: 'agent_status', agent: '智能绘图执行', status: 'success' })
-    } catch (e) {
-      emit({ type: 'agent_status', agent: '智能绘图执行', status: 'error', error: getErrorMsg(e) })
-      emit({ type: 'error', error: 'LLM代码生成及修复均失败', data: getErrorMsg(e) })
-      throw e
-    }
-    emit({ type: 'result', data: { answer: '已为你生成图表，支持下载PNG/SVG/HTML。', plotly_figure } })
-    return { answer: '已为你生成图表，支持下载PNG/SVG/HTML。', plotly_figure, sessionId: sid }
-  } catch (error) {
-    emit({ type: 'error', error: getErrorMsg(error) })
-    throw error
+    const prompt = `你是Python代码修复专家。请根据下方用户问题、错误信息和数据样本，修复给定的Python代码。只输出修正后的完整Python绘图代码（只允许使用seaborn或matplotlib，且优先使用seaborn。结尾plt.savefig('output.png', ...)），禁止plt.show()，不输出多余解释。\n用户问题: ${question}\n错误信息: ${error}${extraTip}\n数据样本: ${JSON.stringify(dataPreview.slice(0,2), null, 2)}\n原始代码:\n${fixed}`;
+    const res = await callLLMWithRetry({
+      model,
+      apiKey,
+      messages: [
+        { role: 'system', content: '你是Python代码修复专家，只能输出Python代码，禁止输出多余解释或JSON包裹。' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.2,
+      max_tokens: 1024
+    });
+    let content = res.choices[0]?.message?.content || '';
+    let newCode = extractPurePythonCode(content);
+    // 自动替换全df聚合为df[fields]聚合
+    newCode = newCode.replace(/df\.(max|min|sum|mean)\s*\(/g, 'df[fields].$1(');
+    fixed = newCode;
   }
+  return fixed;
 }
 
 // ========== 字段提取与辅助函数 ==========
@@ -365,39 +343,8 @@ async function answerAPI(question, model = DEFAULT_MODEL, apiKey) {
 async function retrieveDataAPI(rows, params) { return retrieveData(rows, params) }
 
 /**
- * @description 代码修复agent，升级prompt，报错为to_dict时自动去掉，输出必须能被json.dumps序列化
- */
-async function codeRepairAgent({ code, error, dataPreview, question, model, apiKey, maxRetry = 3, onStatus }) {
-  let fixed = code;
-  for (let i = 0; i < maxRetry; i++) {
-    const prompt = `你是Python代码修复专家。请根据下方用户问题、错误信息和数据样本，修复给定的Python代码。\n【重要约束】只能用变量data（由后端注入全量数据），禁止写 data = [...]，禁止将示例数据写入代码。示例数据仅供你理解字段类型。\n【类型要求】如果 result 是 pandas 的 Series 或 DataFrame，必须先用 .to_dict() 转为 dict 后再输出；如果 result 是单个数字（如mean/sum/聚合），不要加.to_dict()，直接输出。输出内容必须能被json.dumps序列化。\n【修复要求】如果报错为"xxx has no attribute to_dict"，请去掉.to_dict()。\n【输出要求】输出必须以print(json.dumps(result, ensure_ascii=False))结尾，禁止多余print。\n用户问题: ${question}\n错误信息: ${error}\n数据样本: ${JSON.stringify(dataPreview.slice(0,2), null, 2)}\n原始代码:\n${fixed}`;
-    const res = await callLLMWithRetry({
-      model,
-      apiKey,
-      messages: [
-        { role: 'system', content: '你是Python代码修复专家，只能输出Python代码块（用```python ... ```包裹），且代码最后必须有print(json.dumps(result, ensure_ascii=False))。' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.2,
-      max_tokens: 1024
-    });
-    let content = res.choices[0]?.message?.content || '';
-    let newCode = extractPurePythonCode(content);
-    // 强制删除所有 data = [...] 赋值
-    newCode = newCode.replace(/data\s*=\s*\[([\s\S]*?)\];?/g, '');
-    // 优化：如报错为to_dict，自动去掉result的.to_dict()
-    if (/has no attribute 'to_dict'/.test(error) || /has no attribute "to_dict"/.test(error)) {
-      newCode = newCode.replace(/(result\s*=\s*[^\n;]+)\.to_dict\(\)/g, '$1');
-    }
-    fixed = newCode;
-  }
-  return fixed;
-}
-
-/**
  * @description 智能体主入口，自动分流到plot/calc/general链路
  * @param {Object} params
- * @param {string} params.sessionId 会话唯一标识
  * @param {string} params.question 用户问题
  * @param {string[]} params.columns 字段名
  * @param {any[]} params.dataPreview 前几行数据
@@ -407,38 +354,38 @@ async function codeRepairAgent({ code, error, dataPreview, question, model, apiK
  * @param {function} params.onStatus 链路状态回调（SSE风格）
  * @returns {Promise<any>}
  */
-async function mainAgent({ sessionId, question, columns, dataPreview, data, model, apiKey, onStatus }) {
-  // 只在plot链路传递sessionId和onStatus带sessionId
+async function mainAgent({ question, columns, dataPreview, data, model, apiKey, onStatus }) {
+  // 不再传递sessionId
   const safeOnStatus = (msg) => {
-    if (msg && msg.type === 'intent') {
-      // intent阶段不带sessionId
-      onStatus({ ...msg, sessionId: undefined });
-    } else if (msg && msg.type && msg.type.startsWith('plot')) {
-      // 仅plot链路带sessionId
-      onStatus({ ...msg, sessionId });
-    } else {
-      // 其它链路不带sessionId
-      onStatus({ ...msg, sessionId: undefined });
-    }
+    onStatus(msg);
   };
   safeOnStatus({ type: 'intent', status: 'running' });
   const intent = await detectIntent({ question, model, apiKey });
   safeOnStatus({ type: 'intent', status: 'success', data: intent });
   if (intent === 'plot') {
-    // 仅plot链路传递sessionId和带sessionId的onStatus
-    return await plotChain({ sessionId, question, columns, dataPreview, data, model, apiKey, onStatus: safeOnStatus });
+    // 仅传递必要参数
+    return await plotChain({ question, columns, dataPreview, data, model, apiKey, onStatus: safeOnStatus });
   } else if (intent === 'calc') {
-    // calc链路不传递sessionId，onStatus不带sessionId
-    return await calcChain({ question, columns, dataPreview, data, model, apiKey, onStatus: (msg) => onStatus({ ...msg, sessionId: undefined }) });
+    return await calcChain({ question, columns, dataPreview, data, model, apiKey, onStatus });
   } else {
-    // general链路不传递sessionId，onStatus不带sessionId
     return await generalChain({ question, columns, dataPreview, data, model, apiKey });
   }
 }
 
-// plot链路
-async function plotChain({ sessionId, question, columns, dataPreview, data, model, apiKey, onStatus }) {
-  onStatus({ sessionId, type: 'plot-fields', status: 'running' });
+// plot链路（重构版，仅用代码生成和修复agent）
+/**
+ * @description 智能绘图主流程
+ * @param {Object} params
+ * @param {string} params.question 用户问题
+ * @param {string[]} params.columns 字段名
+ * @param {any[]} params.dataPreview 前几行数据
+ * @param {any[]} params.data 全量数据
+ * @param {string} params.model LLM模型名
+ * @param {string} params.apiKey API密钥
+ * @returns {Promise<{python_code: string, png_path: string}>}
+ */
+async function plotChain({ question, columns, dataPreview, data, model, apiKey }) {
+  // 1. 字段提取
   const plotFields = await extractFieldsFromQuestion(
     question,
     columns || (data[0] ? Object.keys(data[0]) : []),
@@ -446,42 +393,29 @@ async function plotChain({ sessionId, question, columns, dataPreview, data, mode
     model,
     apiKey
   );
-  onStatus({ sessionId, type: 'plot-fields', status: 'success', data: plotFields });
-  onStatus({ sessionId, type: 'data-logic', status: 'running' });
-  const dataStatus = await dataLogicAgent({ question, plotFields, dataPreview, model, apiKey });
-  onStatus({ sessionId, type: 'data-logic', status: 'success', data: dataStatus });
-  let plotData = data; // plotData始终为全量data
-  if (dataStatus === 'todo' || dataStatus === 'both') {
-    onStatus({ sessionId, type: 'plot-calc', status: 'running' });
-    plotData = await calcDataAgent({ question, plotFields, data, model, apiKey }); // 传递全量data
-    onStatus({ sessionId, type: 'plot-calc', status: 'success' });
-  }
-  onStatus({ sessionId, type: 'plot-code', status: 'running' });
-  let code = await plotCodeAgent({ question, plotFields, plotData, model, apiKey });
-  onStatus({ sessionId, type: 'plot-code', status: 'success' });
-  let figJson, error;
+  // 2. 代码生成
+  let code = await plotCodeAgent({ question, plotFields, plotData: data, model, apiKey });
+  let pngPath = null;
+  let error = null;
+  // 3. Python执行，失败则自动修复，最多重试3次
   for (let i = 0; i < 3; i++) {
     try {
-      onStatus({ sessionId, type: 'python-exec', status: 'running', retry: i + 1 });
-      // 关键：此处传递的data必须为全量plotData
-      figJson = await runPythonPlotCode({ code, data: plotData });
-      onStatus({ sessionId, type: 'python-exec', status: 'success' });
-      break;
+      // 这里假设runPythonPlotCode返回{pngPath: string}
+      const result = await runPythonPlotCode({ code, data });
+      pngPath = result.pngPath || result.png_path || result;
+      if (pngPath) break;
     } catch (err) {
       error = err;
-      code = await codeRepairAgent({ code, error, dataPreview, question, model, apiKey, onStatus });
+      code = await codeRepairAgent({ code, error, dataPreview, question, model, apiKey });
     }
   }
-  if (!figJson) throw new Error('代码修复失败');
-  onStatus({ sessionId, type: 'fig2png', status: 'running' });
-  const pngPath = await figJsonToPng(figJson);
-  onStatus({ sessionId, type: 'fig2png', status: 'success', data: pngPath });
-  return { figJson, pngPath };
+  if (!pngPath) throw new Error('代码修复失败，未能生成图片');
+  // 4. 返回python_code和png_path
+  return { python_code: code, png_path: pngPath };
 }
 
-// calc链路
-async function calcChain({ question, columns, dataPreview, data, model, apiKey, onStatus }) {
-  onStatus({ type: 'calc-fields', status: 'running' });
+// calc链路（去除所有agent执行状态/进度回调相关代码，保持主流程简洁）
+async function calcChain({ question, columns, dataPreview, data, model, apiKey }) {
   const fields = await extractFieldsFromQuestion(
     question,
     columns || (data[0] ? Object.keys(data[0]) : []),
@@ -489,28 +423,19 @@ async function calcChain({ question, columns, dataPreview, data, model, apiKey, 
     model,
     apiKey
   );
-  onStatus({ type: 'calc-fields', status: 'success', data: fields });
-  onStatus({ type: 'calc-code', status: 'running' });
   let code = await calcCodeAgent({ question, fields, dataPreview, model, apiKey });
-  onStatus({ type: 'calc-code', status: 'success' });
   let result, error;
   for (let i = 0; i < 3; i++) {
     try {
-      onStatus({ type: 'python-exec', status: 'running', retry: i + 1 });
       result = await runPythonCalcCode({ code, data });
-      console.log('[Python执行] 原始结果:', JSON.stringify(result));
-      onStatus({ type: 'python-exec', status: 'success' });
       break;
     } catch (err) {
       error = err;
-      console.error('[Python执行] 错误:', err && err.message);
-      code = await codeRepairAgent({ code, error, dataPreview, question, model, apiKey, onStatus });
+      code = await codeRepairAgent({ code, error, dataPreview, question, model, apiKey });
     }
   }
   if (!result) throw new Error('代码修复失败');
-  onStatus({ type: 'analysis', status: 'running' });
   const analysis = await answerAgent({ result, question, model, apiKey });
-  onStatus({ type: 'analysis', status: 'success', data: analysis });
   return { result, analysis };
 }
 
@@ -647,10 +572,10 @@ async function directLLMAnswer({ question, model, apiKey, systemPrompt }) {
 }
 
 /**
- * @description 数据计算代码生成agent，升级prompt，严格约束：标量不加.to_dict()，Series/DataFrame才加，输出必须能被json.dumps序列化
+ * @description 数据计算代码生成agent，升级prompt，严格约束：只能对后端传入的fields字段数组做聚合，禁止对全df做max/min/sum等操作，输出必须能被json.dumps序列化
  */
 async function calcCodeAgent({ question, fields, dataPreview, model, apiKey }) {
-  const prompt = `你是数据分析代码专家。请根据用户问题和字段，生成可直接运行的pandas代码，严格只用下列字段，不要凭空创造字段。\n【重要约束】你只能用如下代码创建DataFrame：df = pd.DataFrame(data)，其中data变量由后端注入全量数据，禁止将示例数据写入代码。示例数据仅供你理解字段类型。\n【禁止】禁止写 data = [...]，禁止将示例数据写入代码。\n【输出要求】输出必须以print(json.dumps(result, ensure_ascii=False))结尾，禁止多余print。\n【类型要求】如果 result 是 pandas 的 Series 或 DataFrame，必须先用 .to_dict() 转为 dict 后再输出；如果 result 是单个数字（如mean/sum/聚合），不要加.to_dict()，直接输出。输出内容必须能被json.dumps序列化。\n用户问题: ${question}\n目标字段: ${fields}\n数据样本: ${JSON.stringify(dataPreview.slice(0,2), null, 2)}`;
+  const prompt = `你是数据分析代码专家。请根据用户问题和字段，生成可直接运行的pandas代码，严格只用下列字段，不要凭空创造字段，也不能写死字段名。\n【重要约束】你只能用如下代码创建DataFrame：df = pd.DataFrame(data)，其中data变量由后端注入全量数据，禁止将示例数据写入代码。示例数据仅供你理解字段类型。\n【禁止】禁止写 data = [...]，禁止将示例数据写入代码。\n【输出要求】所有聚合、统计、加和、最大、最小等操作只能对后端传入的字段数组fields做，不能对全df做max()/min()/sum()等操作，不能用df.max()、df.sum()等，必须用df[fields]或等价写法。字段名由后端动态传入，不能写死。输出必须以print(json.dumps(result, ensure_ascii=False))结尾，禁止多余print。\n【类型要求】如果 result 是 pandas 的 Series 或 DataFrame，必须先用 .to_dict() 转为 dict 后再输出；如果 result 是单个数字（如mean/sum/聚合），不要加.to_dict()，直接输出。输出内容必须能被json.dumps序列化。\n用户问题: ${question}\n目标字段: ${fields}\n数据样本: ${JSON.stringify(dataPreview.slice(0,2), null, 2)}`;
   const res = await callLLMWithRetry({
     model,
     apiKey,
@@ -664,36 +589,15 @@ async function calcCodeAgent({ question, fields, dataPreview, model, apiKey }) {
   let code = extractPurePythonCode(res.choices[0]?.message?.content || '');
   // 强制删除所有 data = [...] 赋值
   code = code.replace(/data\s*=\s*\[([\s\S]*?)\];?/g, '');
+  // 自动替换所有对df的全表聚合为df[fields]聚合，保证泛化
+  code = code.replace(/df\.(max|min|sum|mean)\s*\(/g, 'df[fields].$1(');
   // 优化：只对Series/DataFrame加.to_dict()，标量不加
   code = code.replace(/(result\s*=\s*df\.[^\n;]+(mean|sum|groupby)\([^)]+\)[^\n;]*)/g, (m, g1) => {
-    // 如果有agg/groupby但不是Series/DataFrame，且没有.to_dict()，不加
     if (/to_dict\(\)/.test(g1)) return g1;
-    // 如果有[['字段']]或[字段]，一般是Series，需加.to_dict()
     if (/\[\[.*?\]\]/.test(g1) || /\['.*?'\]/.test(g1)) return g1 + '.to_dict()';
-    // 其它情况不加
     return g1;
   });
   return code;
-}
-
-// 智能绘图代码生成agent
-async function plotCodeAgent({ question, plotFields, plotData, model, apiKey }) {
-  const prompt = `你是一个数据可视化专家。请根据下方用户问题和字段，生成用于plotly绘图的Python代码，代码必须以\`\`\`python ... \`\`\`包裹，且最后输出result字典并print(json.dumps(result, ensure_ascii=False))。只能用如下字段：${plotFields.join('、')}。数据示例：${JSON.stringify(plotData.slice(0,5), null, 2)}。用户问题：${question}`;
-  const res = await callLLMWithRetry({
-    model,
-    apiKey,
-    messages: [
-      { role: 'system', content: '你是一个数据可视化专家，只能输出Python代码块。' },
-      { role: 'user', content: prompt }
-    ],
-    temperature: 0.3,
-    max_tokens: 1024,
-    top_p: 0.9,
-    frequency_penalty: 0.3
-  });
-  const answer = res.choices[0]?.message?.content || '';
-  const codeMatch = answer.match(/```python([\s\S]*?)```/);
-  return codeMatch ? codeMatch[1].trim() : answer;
 }
 
 // 数据计算链路辅助agent
@@ -753,12 +657,6 @@ function getErrorMsg(e) {
   return e && e.message ? e.message : String(e);
 }
 
-// 代码修复自动化agent
-async function autoFixWithCodeRepairAgent({ userQuestion, plotData, lastCode, errorMsg, model, maxRetry, runCodeFn }) {
-  // 简化：直接返回lastCode
-  return lastCode;
-}
-
 // 代码自动执行辅助
 async function runCodeWithAutoFieldCheck() {
   // 简化：直接返回null
@@ -769,12 +667,13 @@ async function runCodeWithAutoFieldCheck() {
  * @description 数据解释agent，输入为用户问题和真实结果，输出一段简明、专业的分析解释
  */
 async function answerAgent({ result, question, model, apiKey }) {
-  const prompt = `你是一名专业数据分析师，请根据用户问题和代码执行结果，输出一段简明、专业的分析解释。\n用户问题：${question}\n代码执行结果：${JSON.stringify(result, null, 2)}`;
+  // 精简版：system prompt 只设定角色和风格，user prompt 只描述输入和输出要求
+  const prompt = `用户问题：${question}\n分析结果：${JSON.stringify(result, null, 2)}\n请用自然语言给出简明分析。`;
   const res = await callLLMWithRetry({
     model,
     apiKey,
     messages: [
-      { role: 'system', content: '你是一名专业数据分析师，请根据用户问题和代码执行结果，输出一段简明、专业的分析解释。' },
+      { role: 'system', content: '你是一名专业的数据分析助手。请根据用户的问题和分析结果，直接用简洁、自然的中文向用户解释和分析数据，不要提及"代码执行"或"后台"等技术细节。' },
       { role: 'user', content: prompt }
     ],
     temperature: 0.3,
@@ -800,7 +699,6 @@ module.exports = {
   retrieveData: retrieveDataAPI,
   detectIntent: detectIntentAPI,
   askQuestion: askQuestionAPI,
-  createVisualization,
   answer: answerAPI,
   mainAgent,
   callLLM,

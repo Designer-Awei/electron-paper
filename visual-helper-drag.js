@@ -274,6 +274,27 @@
   }
 
   /**
+   * 去除常见markdown强调符号，仅保留纯文本
+   * @param {string} md
+   * @returns {string}
+   */
+  function stripMarkdown(md) {
+    if (!md) return '';
+    // 去除加粗/斜体/下划线
+    let text = md.replace(/(\*\*|__)(.*?)\1/g, '$2');
+    text = text.replace(/(\*|_)(.*?)\1/g, '$2');
+    // 去除标题（#）
+    text = text.replace(/^#+\s*/gm, '');
+    // 去除引用符号
+    text = text.replace(/^>\s*/gm, '');
+    // 去除无序/有序列表符号
+    text = text.replace(/^\s*([-*+]|\d+\.)\s+/gm, '');
+    // 去除多余空行
+    text = text.replace(/\n{3,}/g, '\n\n');
+    return text;
+  }
+
+  /**
    * 渲染助手消息气泡（分离渲染多行代码块与内联代码，参考文献助手addMessage实现）
    * @param {string} text 助手回复内容（markdown）
    */
@@ -289,7 +310,9 @@
     div.className = 'vh-bot-message';
     const messageContent = document.createElement('div');
     messageContent.className = 'message-content';
-    const trimmedText = text.trim();
+    // 先去除markdown强调符号
+    const cleanedText = stripMarkdown(text.trim());
+    const trimmedText = cleanedText;
     // 1. 优先处理多行代码块
     const codeBlockRegex = /```([a-zA-Z]*)\n([\s\S]*?)```/g;
     const inlineCodeRegex = /`([^`]+)`/g;
@@ -464,7 +487,6 @@
   /**
    * 发送消息主流程，带摘要记忆，统一走dataAgent
    * 注意：发送给意图识别等agent的question参数始终为最新用户输入，不附带历史记忆
-   * 每次请求都自动生成新的 sessionId，避免热重载后会话id失效
    */
   async function handleSend() {
     const text = inputArea.value.trim();
@@ -498,15 +520,12 @@
         ...messages.slice(7)
       ];
     }
-    // 每次请求都生成新的 sessionId，避免热重载后会话id失效
-    const sessionId = Date.now().toString() + Math.random().toString(36).slice(2, 8);
     // 发送前彻底移除所有监听器，防止多次注册
     if (window.electronAPI.removeAllDataAgentListeners) {
       window.electronAPI.removeAllDataAgentListeners();
     }
     // 只传递最新用户输入给智能体主流程（如意图识别agent等）
     window.electronAPI.runDataAgent({
-      sessionId,
       question: text, // 始终为最新用户输入
       columns,
       dataPreview,
@@ -519,7 +538,7 @@
       // 可根据msg.type/status渲染进度
     });
     // 注册新的监听器
-    dataAgentResultListener = function({ sessionId: sid, figJson, pngPath, result, analysis, answer }) {
+    dataAgentResultListener = function({ figJson, pngPath, result, analysis, answer }) {
       // 移除"助手正在思考..."气泡
       const lastBot = historyArea.querySelector('.vh-bot-message:last-child');
       if (lastBot && lastBot.textContent === '助手正在思考...') {
@@ -554,7 +573,7 @@
     };
     window.electronAPI.onDataAgentResult(dataAgentResultListener);
     window.electronAPI.__vhResultListener = dataAgentResultListener;
-    dataAgentErrorListener = function({ sessionId: sid, error }) {
+    dataAgentErrorListener = function({ error }) {
       // 移除所有"助手正在思考..."气泡
       const botMessages = historyArea.querySelectorAll('.vh-bot-message');
       botMessages.forEach(msg => {

@@ -1941,12 +1941,6 @@
         .vh-send-btn:hover {
           background: #0d62d1;
         }
-        @media (max-width: 900px) {
-          .settings-model-row {
-            flex-direction: column !important;
-            gap: 24px !important;
-          }
-        }
         /* ...原有样式... */
         #vhLeftHistory {
           display: flex;
@@ -1984,6 +1978,54 @@
           text-align: justify;
           word-break: break-word;
           border: 1px solid #c6e5b1;
+        }
+        .settings-model-row {
+          display: flex;
+          flex-direction: row;
+          align-items: flex-start;
+          width: 100%;
+          gap: 4%; /* 两块之间间隔4% */
+          flex-wrap: nowrap; /* 禁止换行 */
+          box-sizing: border-box;
+          padding: 0;
+          margin: 0;
+          margin-bottom: 20px; /* 新增：下方留白 */
+        }
+        .settings-model-row .model-item {
+          width: 48%; /* 每块占48% */
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-start;
+        }
+        .settings-model-row .model-item label,
+        .settings-model-row .model-item select,
+        .settings-model-row .model-item .description {
+          width: 100%;
+          box-sizing: border-box;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        /* 保证说明文字不会撑开高度 */
+        .settings-model-row .model-item .description {
+          white-space: normal;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          word-break: break-all;
+        }
+        /* 移除所有小屏下的换行和宽度覆盖，保证始终一行 */
+        @media (max-width: 900px) {
+          .settings-model-row {
+            gap: 16px !important; /* 缩小间距 */
+          }
+          .settings-model-row .model-item {
+            min-width: 180px;
+            flex: 1 1 0;
+          }
         }
     </style>
     <!-- 引入xlsx库（用于前端解析excel/csv） -->
@@ -2294,8 +2336,8 @@
                 </div>
             </div>
             
-            <div style="display: flex; gap: 40px; width: 100%; flex-wrap: nowrap;" class="settings-model-row">
-                <div class="form-group" style="flex:1 1 0; min-width:0; max-width:none; align-self: flex-start;">
+            <div style="display: flex; gap: 40px; width: 100%; flex-wrap: nowrap; align-items: flex-start;" class="settings-model-row">
+                <div class="form-group model-item">
                     <label for="settingsModelSelection">翻译模型</label>
                     <select id="settingsModelSelection" style="width: 100%; box-sizing: border-box;">
                         <option value="THUDM/glm-4-9b-chat" selected>THUDM/glm-4-9b-chat (默认，128K文本，更快，免费)</option>
@@ -2304,10 +2346,10 @@
                         <option value="deepseek-ai/DeepSeek-V3">deepseek-ai/DeepSeek-V3 (备选，64k文本，付费)</option>
                     </select>
                     <div class="description">
-                        选择用于翻译的模型，不同模型支持的上下文长度和翻译质量各有不同。
+                        选择用于检索结果翻译的模型。
                     </div>
                 </div>
-                <div class="form-group" style="flex:1 1 0; min-width:0; max-width:none; align-self: flex-end;">
+                <div class="form-group model-item">
                     <label for="settingsChatModelSelection">对话&绘图模型</label>
                     <select id="settingsChatModelSelection" style="width: 100%; box-sizing: border-box;">
                         <option value="THUDM/glm-4-9b-chat" selected>THUDM/glm-4-9b-chat (默认，128K文本，免费)</option>
@@ -2322,12 +2364,45 @@
                 </div>
             </div>
             <style>
-            @media (max-width: 900px) {
-              .settings-model-row {
-                flex-direction: column !important;
-                gap: 24px !important;
-              }
+            .settings-model-row {
+              display: flex;
+              flex-direction: row;
+              align-items: flex-start;
+              width: 100%;
+              gap: 4%; /* 两块之间间隔4% */
+              flex-wrap: nowrap; /* 禁止换行 */
+              box-sizing: border-box;
+              padding: 0;
+              margin: 0;
+              margin-bottom: 20px; /* 新增：下方留白 */
             }
+            .settings-model-row .model-item {
+              width: 48%; /* 每块占48% */
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+              overflow: hidden;
+              display: flex;
+              flex-direction: column;
+              justify-content: flex-start;
+            }
+            .settings-model-row .model-item label,
+            .settings-model-row .model-item select,
+            .settings-model-row .model-item .description {
+              width: 100%;
+              box-sizing: border-box;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+            /* 保证说明文字不会撑开高度 */
+            .settings-model-row .model-item .description {
+              white-space: normal;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              word-break: break-all;
+            }
+            /* 移除所有小屏下的换行和宽度覆盖，保证始终一行 */
             </style>
             
             <div class="form-group">

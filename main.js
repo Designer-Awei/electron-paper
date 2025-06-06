@@ -563,24 +563,22 @@ app.whenReady().then(() => {
 
   // 智能体主流程
   ipcMain.on('data-agent:run', async (event, params) => {
-    const { sessionId, ...rest } = params;
     let apiKey = params.apiKey;
     if (!apiKey) {
       apiKey = getApiKey();
     }
     try {
       await dataAgent.mainAgent({
-        ...rest,
+        ...params,
         apiKey,
-        sessionId,
-        onStatus: (msg) => event.sender.send('data-agent:status', { sessionId, ...msg })
+        onStatus: (msg) => event.sender.send('data-agent:status', msg)
       }).then(result => {
-        event.sender.send('data-agent:result', { sessionId, ...result });
+        event.sender.send('data-agent:result', result);
       }).catch(err => {
-        event.sender.send('data-agent:error', { sessionId, error: err.message });
+        event.sender.send('data-agent:error', { error: err.message });
       });
     } catch (err) {
-      event.sender.send('data-agent:error', { sessionId, error: err.message });
+      event.sender.send('data-agent:error', { error: err.message });
     }
   });
 
