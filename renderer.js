@@ -136,6 +136,10 @@ let isShowingOriginal = false;
 const importKnowledgeBase = document.getElementById('importKnowledgeBase');
 const exportKnowledgeBase = document.getElementById('exportKnowledgeBase');
 
+// 获取可视化项目存放地址相关DOM
+const visualProjectPath = document.getElementById('visualProjectPath');
+const selectVisualProjectPathButton = document.getElementById('selectVisualProjectPathButton');
+
 /**
  * @description 获取日期范围
  * @returns {Object} 开始和结束日期
@@ -4471,4 +4475,25 @@ document.head.appendChild(searchSuggestionStyles);
   // 初始调整
   adjustTextareaHeight();
 })();
+
+// 添加选择可视化项目路径按钮事件监听
+selectVisualProjectPathButton.addEventListener('click', async () => {
+    try {
+        // 使用selectDirectory方法选择文件夹
+        const selectedPath = await window.electronAPI.selectDirectory();
+        if (!selectedPath) {
+            console.log('用户取消了选择可视化项目文件夹操作');
+            return;
+        }
+        // 保存选择的路径，添加末尾的斜杠/反斜杠
+        const formattedPath = selectedPath + '\\';
+        visualProjectPath.value = formattedPath;
+        localStorage.setItem('visualProjectPath', formattedPath);
+        // 显示设置成功的提示
+        alert(`已设置可视化项目存放路径为: ${formattedPath}`);
+    } catch (error) {
+        console.error('选择可视化项目路径失败:', error);
+        alert('选择可视化项目路径失败: ' + error.message);
+    }
+});
 

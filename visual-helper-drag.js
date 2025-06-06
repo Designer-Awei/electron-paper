@@ -733,4 +733,265 @@
       };
     }
   }
+})();
+
+/**
+ * 图表微调区右侧对话功能（无记忆，每次只发单轮，气泡样式与左侧一致）
+ * 支持：发送按钮/回车发送，用户消息右侧绿色气泡，助手回复左侧白色气泡，自动滚动，代码块可复制
+ */
+(function() {
+  // DOM元素
+  const inputArea = document.querySelector('#vhTuneInputArea .vh-input');
+  const sendBtn = document.querySelector('#vhTuneInputArea .vh-send-btn');
+  const historyArea = document.getElementById('vhTuneHistory');
+  const clearBtn = Array.from(document.querySelectorAll('#vhTuneArea .secondary-button'))
+    .find(btn => btn.textContent.trim() === '清空对话');
+  if (!inputArea || !sendBtn || !historyArea) return;
+
+  // 获取模型和API Key（与左侧一致）
+  async function getModelAndApiKey() {
+    const modelSel = document.getElementById('settingsChatModelSelection');
+    const model = modelSel ? modelSel.value : '';
+    const apiKey = await window.electronAPI.getApiKey();
+    return { model, apiKey: apiKey || '' };
+  }
+
+  // 渲染用户气泡
+  function renderUserMessage(text) {
+    const div = document.createElement('div');
+    div.className = 'vh-user-message';
+    div.textContent = text;
+    historyArea.appendChild(div);
+    historyArea.scrollTop = historyArea.scrollHeight;
+  }
+
+  // 渲染助手气泡（支持代码块、复制按钮，复用stripMarkdown/代码块渲染逻辑）
+  function stripMarkdown(md) {
+    if (!md) return '';
+    let text = md.replace(/(\*\*|__)(.*?)\1/g, '$2');
+    text = text.replace(/(\*|_)(.*?)\1/g, '$2');
+    text = text.replace(/^#+\s*/gm, '');
+    text = text.replace(/^>\s*/gm, '');
+    text = text.replace(/^\s*([-*+]|\d+\.)\s+/gm, '');
+    text = text.replace(/\n{3,}/g, '\n\n');
+    return text;
+  }
+  function renderBotMessage(text) {
+    const div = document.createElement('div');
+    div.className = 'vh-bot-message';
+    const messageContent = document.createElement('div');
+    messageContent.className = 'message-content';
+    const cleanedText = stripMarkdown(text.trim());
+    const codeBlockRegex = /```([a-zA-Z]*)\n([\s\S]*?)```/g;
+    const inlineCodeRegex = /`([^`]+)`/g;
+    let lastIndex = 0, match, hasCodeBlock = false;
+    while ((match = codeBlockRegex.exec(cleanedText)) !== null) {
+      hasCodeBlock = true;
+      if (match.index > lastIndex) {
+        const textBefore = cleanedText.substring(lastIndex, match.index);
+        if (inlineCodeRegex.test(textBefore)) {
+          let inlineLastIndex = 0, inlineMatch, textContent = '';
+          inlineCodeRegex.lastIndex = 0;
+          while ((inlineMatch = inlineCodeRegex.exec(textBefore)) !== null) {
+            if (inlineMatch.index > inlineLastIndex) {
+              textContent += textBefore.substring(inlineLastIndex, inlineMatch.index);
+            }
+            textContent += `<span class="inline-code">${inlineMatch[1]}</span>`;
+            inlineLastIndex = inlineMatch.index + inlineMatch[0].length;
+          }
+          if (inlineLastIndex < textBefore.length) {
+            textContent += textBefore.substring(inlineLastIndex);
+          }
+          const textNode = document.createElement('div');
+          textNode.innerHTML = textContent;
+          messageContent.appendChild(textNode);
+        } else {
+          const textNode = document.createElement('div');
+          textNode.textContent = textBefore;
+          messageContent.appendChild(textNode);
+        }
+      }
+      // 代码块本体
+      const codeContainer = document.createElement('div');
+      codeContainer.className = 'code-block-container';
+      const codeHeader = document.createElement('div');
+      codeHeader.className = 'code-block-header';
+      const languageSpan = document.createElement('span');
+      languageSpan.className = 'code-language';
+      const language = match[1].trim() || '代码';
+      languageSpan.textContent = language;
+      codeHeader.appendChild(languageSpan);
+      // 复制按钮
+      const copyButton = document.createElement('button');
+      copyButton.className = 'copy-code-button';
+      copyButton.textContent = '复制';
+      const codeTextToCopy = match[2];
+      copyButton.onclick = function() {
+        if (window.electronAPI && window.electronAPI.copyToClipboard) {
+          window.electronAPI.copyToClipboard(codeTextToCopy)
+            .then(() => {
+              copyButton.textContent = '已复制';
+              setTimeout(() => { copyButton.textContent = '复制'; }, 2000);
+            })
+            .catch(err => {
+              copyButton.textContent = '复制失败';
+              setTimeout(() => { copyButton.textContent = '复制'; }, 2000);
+            });
+        }
+      };
+      codeHeader.appendChild(copyButton);
+      codeContainer.appendChild(codeHeader);
+      const pre = document.createElement('pre');
+      pre.textContent = codeTextToCopy;
+      codeContainer.appendChild(pre);
+      messageContent.appendChild(codeContainer);
+      lastIndex = match.index + match[0].length;
+    }
+    if (!hasCodeBlock) {
+      // 处理内联代码
+      let textContent = '';
+      let inlineLastIndex = 0, inlineMatch;
+      inlineCodeRegex.lastIndex = 0;
+      while ((inlineMatch = inlineCodeRegex.exec(cleanedText)) !== null) {
+        if (inlineMatch.index > inlineLastIndex) {
+          textContent += cleanedText.substring(inlineLastIndex, inlineMatch.index);
+        }
+        textContent += `<span class=\"inline-code\">${inlineMatch[1]}</span>`;
+        inlineLastIndex = inlineMatch.index + inlineMatch[0].length;
+      }
+      if (inlineLastIndex < cleanedText.length) {
+        textContent += cleanedText.substring(inlineLastIndex);
+      }
+      const textNode = document.createElement('div');
+      textNode.innerHTML = textContent;
+      messageContent.appendChild(textNode);
+    }
+    div.appendChild(messageContent);
+    historyArea.appendChild(div);
+    historyArea.scrollTop = historyArea.scrollHeight;
+  }
+
+  // 发送消息
+  async function handleSend() {
+    const text = inputArea.value.trim();
+    if (!text) return;
+    renderUserMessage(text);
+    inputArea.value = '';
+    inputArea.disabled = true;
+    renderBotMessage('助手正在思考...');
+    historyArea.scrollTop = historyArea.scrollHeight;
+    const { model, apiKey } = await getModelAndApiKey();
+    if (!apiKey) {
+      // 移除思考气泡
+      const botMessages = historyArea.querySelectorAll('.vh-bot-message');
+      botMessages.forEach(msg => { if (msg.textContent === '助手正在思考...') msg.remove(); });
+      renderBotMessage('请先在系统设置中配置SiliconFlow API密钥。');
+      inputArea.disabled = false;
+      inputArea.focus();
+      historyArea.scrollTop = historyArea.scrollHeight;
+      return;
+    }
+    // 只发单轮，无记忆
+    window.electronAPI.runDataAgent({
+      question: text,
+      columns: [],
+      dataPreview: [],
+      data: [],
+      model,
+      apiKey
+    });
+    window.electronAPI.onDataAgentResult(function({ analysis, answer, result }) {
+      // 移除思考气泡
+      const lastBot = historyArea.querySelector('.vh-bot-message:last-child');
+      if (lastBot && lastBot.textContent === '助手正在思考...') lastBot.remove();
+      if (analysis) renderBotMessage(analysis);
+      else if (answer) renderBotMessage(answer);
+      else if (result) renderBotMessage(JSON.stringify(result));
+      inputArea.disabled = false;
+      inputArea.focus();
+      historyArea.scrollTop = historyArea.scrollHeight;
+      window.electronAPI.removeAllDataAgentListeners && window.electronAPI.removeAllDataAgentListeners();
+    });
+    window.electronAPI.onDataAgentError(function({ error }) {
+      // 移除思考气泡
+      const botMessages = historyArea.querySelectorAll('.vh-bot-message');
+      botMessages.forEach(msg => { if (msg.textContent === '助手正在思考...') msg.remove(); });
+      renderBotMessage('智能体链路出错：' + error);
+      inputArea.disabled = false;
+      inputArea.focus();
+      historyArea.scrollTop = historyArea.scrollHeight;
+      window.electronAPI.removeAllDataAgentListeners && window.electronAPI.removeAllDataAgentListeners();
+    });
+  }
+
+  // 发送按钮/回车发送
+  sendBtn.addEventListener('click', handleSend);
+  inputArea.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  });
+
+  // 清空对话
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function() {
+      historyArea.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'vh-bot-message';
+      div.textContent = '你好，我是图表微调助手，可以根据你的输入，修改画布中被选中的图表代码。';
+      historyArea.appendChild(div);
+      historyArea.scrollTop = 0;
+    });
+  }
+})();
+
+// 右侧微调区气泡样式修正，插入全局样式
+(function() {
+  const style = document.createElement('style');
+  style.innerHTML = `
+  #vhTuneHistory {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #vhTuneHistory .vh-bot-message,
+  #vhTuneHistory .vh-user-message {
+    display: inline-block;
+    max-width: 75%;
+  }
+  #vhTuneHistory .vh-bot-message {
+    align-self: flex-start;
+    background: #fff;
+    color: #222;
+    border-radius: 12px 12px 12px 0;
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    font-size: 15px;
+    line-height: 1.6;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    text-align: justify;
+    word-break: break-word;
+    border: 1px solid #e0e0e0;
+    margin-left: 0;
+    margin-right: auto;
+  }
+  #vhTuneHistory .vh-user-message {
+    align-self: flex-end;
+    background: #1aad19;
+    color: #fff;
+    border-radius: 12px 12px 0 12px;
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    font-size: 15px;
+    line-height: 1.6;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    text-align: justify;
+    word-break: break-word;
+    border: 1px solid #c6e5b1;
+    margin-right: 0;
+    margin-left: auto;
+  }
+  `;
+  document.head.appendChild(style);
 })(); 
