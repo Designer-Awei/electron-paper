@@ -369,10 +369,12 @@ electron-paper/
   ```
   MyProject/
     ├── project.json         # 项目索引文件（结构化描述所有内容）
-    ├── data.csv            # 数据文件（可有多个）
-    ├── chart1.png          # 画布内的图片
-    ├── chart2.png
-    └── ...                 # 其它资源
+    ├── data/                # 数据文件目录
+    │   └── data.csv         # 上传的数据文件（可有多个）
+    ├── images/              # 图片资源目录
+    │   ├── chart1.png       # 画布内的图片
+    │   └── chart2.png       # 更多图片
+    └── ...                  # 其它资源
   ```
 - 支持一键打包为zip文件（如"MyProject.zip"），便于迁移和分享。
 - **导入项目时，仅支持以文件夹形式导入**，不支持直接导入zip包，需先解压为文件夹后再导入。

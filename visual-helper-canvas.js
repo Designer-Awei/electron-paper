@@ -1,5 +1,85 @@
 // 可视化助手画布区交互逻辑
 // 支持：滚轮上下平移、Ctrl+滚轮缩放、空格+左键拖动、单击选中图形、长按拖动图形
+
+// 将shapes变量提升到IIFE外部，使其成为全局变量
+let shapes = [];
+
+// 将render函数提升到全局作用域
+function render() {
+  const canvas = document.getElementById('mainCanvas');
+  if (!canvas) return;
+  
+  const area = document.getElementById('vhCanvasArea');
+  if (area) {
+    // 自适应尺寸
+    const rect = area.getBoundingClientRect();
+    if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
+      canvas.width = Math.round(rect.width);
+      canvas.height = Math.round(rect.height);
+    }
+  }
+  
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // 获取全局变量
+  const offsetX = window._canvasOffsetX || 0;
+  const offsetY = window._canvasOffsetY || 0;
+  const scale = window._canvasScale || 1;
+  
+  ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+  
+  // 绘制所有对象
+  for (const shape of shapes) {
+    if (shape.type === 'rect' || !shape.type) {
+      ctx.fillStyle = '#fafafa';
+      ctx.strokeStyle = shape.selected ? '#1976d2' : '#bbb';
+      ctx.lineWidth = shape.selected ? 4 : 2;
+      ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+      ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+    } else if (shape.type === 'image' && shape._img) {
+      try {
+        ctx.drawImage(shape._img, shape.x, shape.y, shape.width, shape.height);
+        // 选中边框
+        if (shape.selected) {
+          ctx.save();
+          ctx.strokeStyle = '#1976d2';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+          ctx.restore();
+        }
+      } catch (err) {
+        console.error('绘制图片失败:', err);
+      }
+    }
+    
+    // 绘制四角缩放手柄（仅选中时）
+    if (shape.selected) {
+      const HANDLE_SIZE = 12;
+      ctx.save();
+      ctx.fillStyle = '#1976d2';
+      
+      // 获取四个角的坐标
+      const handles = [
+        { x: shape.x, y: shape.y }, // 左上
+        { x: shape.x + shape.width, y: shape.y }, // 右上
+        { x: shape.x, y: shape.y + shape.height }, // 左下
+        { x: shape.x + shape.width, y: shape.y + shape.height } // 右下
+      ];
+      
+      for (const handle of handles) {
+        ctx.fillRect(handle.x - HANDLE_SIZE/2, handle.y - HANDLE_SIZE/2, HANDLE_SIZE, HANDLE_SIZE);
+      }
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+// 暴露全局变量
+window.render = render;
+
 (function() {
   const canvas = document.getElementById('mainCanvas');
   const viewport = document.getElementById('canvasViewport');
@@ -11,6 +91,11 @@
   let dragging = false;
   let lastX = 0, lastY = 0;
   let spacePressed = false;
+  
+  // 保存全局变量，供render函数使用
+  window._canvasOffsetX = offsetX;
+  window._canvasOffsetY = offsetY;
+  window._canvasScale = scale;
 
   // 新增：加载示例_4.py代码内容
   let example4Code = '';
@@ -35,7 +120,7 @@
   ];
 
   // 画布图形数据，支持多图形和图片
-  const shapes = [
+  shapes = [
     ...examplePngs.map(img => ({
       ...img,
       type: 'image',
@@ -126,27 +211,6 @@
   }
 
   /**
-   * 让canvas自适应父容器vhCanvasArea的实际宽高
-   * 并在窗口resize时自动调整
-   */
-  function resizeCanvasToFit() {
-    const rect = area.getBoundingClientRect();
-    if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
-      canvas.width = Math.round(rect.width);
-      canvas.height = Math.round(rect.height);
-      render(); // 尺寸变化后立即刷新
-    }
-  }
-  window.addEventListener('resize', () => {
-    resizeCanvasToFit();
-    render();
-  });
-  window.addEventListener('DOMContentLoaded', function() {
-    resizeCanvasToFit();
-    render();
-  });
-
-  /**
    * 判断点是否在图形内
    * @param {number} x
    * @param {number} y
@@ -188,43 +252,33 @@
    * 渲染函数，支持绘制矩形和图片对象
    * @returns {void}
    */
-  function render() {
-    resizeCanvasToFit();
-    const ctx = canvas.getContext('2d');
-    ctx.save();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-    // 绘制所有对象
-    for (const shape of shapes) {
-      if (shape.type === 'rect' || !shape.type) {
-        ctx.fillStyle = '#fafafa';
-        ctx.strokeStyle = shape.selected ? '#1976d2' : '#bbb';
-        ctx.lineWidth = shape.selected ? 4 : 2;
-        ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
-        ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-      } else if (shape.type === 'image' && shape._img) {
-        ctx.drawImage(shape._img, shape.x, shape.y, shape.width, shape.height);
-        // 选中边框
-        if (shape.selected) {
-          ctx.save();
-          ctx.strokeStyle = '#1976d2';
-          ctx.lineWidth = 4;
-          ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-          ctx.restore();
-        }
-      }
-      // 绘制四角缩放手柄（仅选中时）
-      if (shape.selected) {
-        ctx.save();
-        ctx.fillStyle = '#1976d2';
-        for (const handle of getResizeHandles(shape)) {
-          ctx.fillRect(handle.x - HANDLE_SIZE/2, handle.y - HANDLE_SIZE/2, HANDLE_SIZE, HANDLE_SIZE);
-        }
-        ctx.restore();
-      }
-    }
-    ctx.restore();
+  function innerRender() {
+    // 更新全局变量
+    window._canvasOffsetX = offsetX;
+    window._canvasOffsetY = offsetY;
+    window._canvasScale = scale;
+    
+    // 调用全局render函数
+    render();
   }
+
+  // 替换原来的render调用为innerRender
+  function resizeCanvasToFit() {
+    const rect = area.getBoundingClientRect();
+    if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
+      canvas.width = Math.round(rect.width);
+      canvas.height = Math.round(rect.height);
+      innerRender(); // 尺寸变化后立即刷新
+    }
+  }
+  window.addEventListener('resize', () => {
+    resizeCanvasToFit();
+    innerRender();
+  });
+  window.addEventListener('DOMContentLoaded', function() {
+    resizeCanvasToFit();
+    innerRender();
+  });
 
   // 滚轮事件
   viewport.addEventListener('wheel', function(e) {
@@ -604,4 +658,144 @@ window.renderVisualHelperPngAndFig = function(pngPath, figJson) {
  * 上传/解析数据后，务必调用window.onVisualHelperDataUpload(jsonData)
  * 这样全局columns、dataPreview、data才能被后续链路正确使用
  */
-// ... existing code ... 
+// 暴露shapes变量，供项目导入导出功能使用
+window.shapes = shapes;
+
+/**
+ * 加载画布状态
+ * @param {Array} canvasState 画布状态数组
+ */
+window.loadCanvasState = function(canvasState) {
+  try {
+    console.log('开始加载画布状态:', canvasState);
+    if (!canvasState || !Array.isArray(canvasState) || !canvasState.length) {
+      console.warn('画布状态为空或格式不正确');
+      return;
+    }
+    
+    // 清空当前画布
+    shapes.length = 0;
+    
+    // 加载新的状态
+    canvasState.forEach((shape, index) => {
+      try {
+        if (shape.type === 'image') {
+          console.log(`加载图片 ${index}:`, shape.src);
+          const img = new window.Image();
+          
+          // 添加加载成功和失败的处理
+          img.onload = function() {
+            console.log(`图片 ${index} 加载成功:`, shape.src);
+            render();
+          };
+          
+          img.onerror = function(err) {
+            console.error(`图片 ${index} 加载失败:`, shape.src, err);
+            
+            // 尝试修复路径
+            if (shape.src && !shape.src.startsWith('data:')) {
+              console.log('尝试修复图片路径...');
+              
+              // 移除file://前缀，使用相对路径
+              let newSrc = shape.src.replace(/^file:\/\/\/?/i, '');
+              
+              // 只保留文件名部分
+              if (newSrc.includes('/')) {
+                const fileName = newSrc.split('/').pop();
+                if (fileName) {
+                  console.log('尝试从images目录加载:', fileName);
+                  
+                  // 只尝试从images目录加载
+                  const imagePath = `images/${fileName}`;
+                  console.log('尝试路径:', imagePath);
+                  img.src = imagePath;
+                  return;
+                }
+              }
+              
+              // 如果没有文件名，尝试使用原始相对路径
+              console.log('尝试使用相对路径:', newSrc);
+              img.src = newSrc;
+            }
+          };
+          
+          // 设置图片源
+          img.src = shape.src;
+          
+          shapes.push({
+            ...shape,
+            _img: img
+          });
+        } else {
+          shapes.push({...shape});
+        }
+      } catch (err) {
+        console.error(`处理画布状态项 ${index} 失败:`, err);
+      }
+    });
+    
+    // 触发渲染
+    render();
+    console.log('画布状态加载完成');
+  } catch (err) {
+    console.error('加载画布状态失败:', err);
+  }
+};
+
+/**
+ * 加载左侧对话历史
+ * @param {Array} chatHistory 对话历史数组
+ */
+window.loadLeftChatHistory = function(chatHistory) {
+  if (!chatHistory || !Array.isArray(chatHistory) || !chatHistory.length) return;
+  
+  const historyArea = document.getElementById('vhLeftHistory');
+  if (!historyArea) return;
+  
+  // 清空当前历史
+  historyArea.innerHTML = '';
+  
+  // 加载新的历史
+  chatHistory.forEach(msg => {
+    const div = document.createElement('div');
+    if (msg.role === 'user') {
+      div.className = 'vh-user-message';
+    } else {
+      div.className = 'vh-bot-message';
+    }
+    div.textContent = msg.content;
+    historyArea.appendChild(div);
+  });
+  
+  // 滚动到底部
+  historyArea.scrollTop = historyArea.scrollHeight;
+};
+
+/**
+ * 加载右侧对话历史
+ * @param {Array} chatHistory 对话历史数组
+ */
+window.loadRightChatHistory = function(chatHistory) {
+  if (!chatHistory || !Array.isArray(chatHistory) || !chatHistory.length) return;
+  
+  const historyArea = document.getElementById('vhTuneHistory');
+  if (!historyArea) return;
+  
+  // 清空当前历史
+  historyArea.innerHTML = '';
+  
+  // 加载新的历史
+  chatHistory.forEach(msg => {
+    const div = document.createElement('div');
+    if (msg.role === 'user') {
+      div.className = 'vh-user-message';
+    } else {
+      div.className = 'vh-bot-message';
+    }
+    div.textContent = msg.content;
+    historyArea.appendChild(div);
+  });
+  
+  // 滚动到底部
+  historyArea.scrollTop = historyArea.scrollHeight;
+}; 

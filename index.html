@@ -2223,8 +2223,8 @@
                     <div class="vh-upload-wrapper" style="padding:16px 16px 0 16px;">
                       <div id="vhUploadDropZone" style="height:140px;border:2px dashed #bbb;margin:0;display:flex;align-items:center;justify-content:center;color:#888;font-size:16px;background:#fff;box-sizing:border-box;border-radius:10px;cursor:pointer;">
                         <div style="width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-                          <div style="font-size:16px;color:#222;font-weight:500;margin-bottom:6px;">点击或拖拽文件到此区域上传</div>
-                          <div style="font-size:14px;color:#888;">支持 Excel 和 CSV 格式的数据文件</div>
+                          <div style="font-size:16px;color:#222;font-weight:500;margin-bottom:6px;">点击或拖拽文件到此上传</div>
+                          <div style="font-size:14px;color:#888;">支持 Excel 和 CSV 格式文件</div>
                         </div>
                       </div>
                       <div id="vhUploadPreview" style="margin-top:12px;"></div>
@@ -2262,13 +2262,13 @@
               <div style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;background:#f0f0f0;padding:0;">
                 <!-- 项目标题栏 -->
                 <div style="height:48px;display:flex;align-items:center;position:relative;border-bottom:1px solid #e0e0e0;background:#fff;padding:0 12px;">
-                  <button class="secondary-button" style="margin-right:10px;width:50px;min-width:50px;max-width:50px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;padding:0;">
+                  <button id="visualImportBtn" class="secondary-button" style="margin-right:10px;width:50px;min-width:50px;max-width:50px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;padding:0;">
                     <i class="fas fa-folder-open"></i>
                   </button>
-                  <button class="primary-button" style="margin-right:20px;width:50px;min-width:50px;max-width:50px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;padding:0;">
+                  <button id="visualExportBtn" class="primary-button" style="margin-right:20px;width:50px;min-width:50px;max-width:50px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;padding:0;">
                     <i class="fas fa-download"></i>
                   </button>
-                  <input type="text" value="project title" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:20px;font-weight:bold;border:none;background:transparent;outline:none;width:auto;max-width:calc(100% - 140px);min-width:240px;text-align:center;z-index:1;padding:4px 8px;">
+                  <input type="text" id="projectTitleInput" value="project title" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:20px;font-weight:bold;border:none;background:transparent;outline:none;width:auto;max-width:calc(100% - 140px);min-width:240px;text-align:center;z-index:1;padding:4px 8px;">
                 </div>
                 <!-- 下方主内容区 -->
                 <div style="flex:1;display:flex;min-height:0;">
@@ -2546,9 +2546,75 @@
         </div>
     </div>
 
+    <!-- 可视化项目导出弹窗 -->
+    <div id="visualExportModal" class="modal">
+        <div class="export-modal-content">
+            <div class="export-modal-header">
+                <h2>导出可视化项目</h2>
+                <button class="close-button" id="closeVisualExportModal">&times;</button>
+            </div>
+            <div style="margin-top: 10px;">
+                <div style="margin-bottom: 15px;">
+                    <label for="visualExportPath" style="display: block; margin-bottom: 5px;">导出路径</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="visualExportPath" placeholder="选择项目导出路径" class="full-width-input" readonly style="flex: 1;">
+                        <button id="selectVisualExportPathButton" class="secondary-button" style="width: auto; min-width: 90px; white-space: nowrap; padding: 0 12px;">选择路径</button>
+                    </div>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label for="visualProjectName" style="display: block; margin-bottom: 5px;">项目名称</label>
+                    <input type="text" id="visualProjectName" placeholder="输入项目名称" class="full-width-input">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label for="visualExportFormat" style="display: block; margin-bottom: 5px;">导出格式</label>
+                    <select id="visualExportFormat" class="full-width-input">
+                        <option value="folder">文件夹</option>
+                        <option value="zip">ZIP压缩包</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label for="visualProjectDescription" style="display: block; margin-bottom: 5px;">项目描述（可选）</label>
+                    <textarea id="visualProjectDescription" placeholder="输入项目描述..." class="full-width-input" style="height: 80px; resize: vertical;"></textarea>
+                </div>
+            </div>
+            <div id="visualExportMessage" class="export-message" style="display: none; margin-top: 10px; padding: 8px; border-radius: 4px;"></div>
+            <div class="modal-footer" style="margin-top: 15px;">
+                <button id="cancelVisualExport" class="secondary-button">取消</button>
+                <button id="confirmVisualExport" class="primary-button">导出</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 可视化项目导入弹窗 -->
+    <div id="visualImportModal" class="modal">
+        <div class="export-modal-content">
+            <div class="export-modal-header">
+                <h2>导入可视化项目</h2>
+                <button class="close-button" id="closeVisualImportModal">&times;</button>
+            </div>
+            <div style="margin-top: 10px;">
+                <p>请选择要导入的项目文件夹：</p>
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="visualImportPath" placeholder="选择项目文件夹" class="full-width-input" readonly style="flex: 1;">
+                        <button id="selectVisualImportPathButton" class="secondary-button" style="width: auto; min-width: 90px; white-space: nowrap; padding: 0 12px;">选择文件夹</button>
+                    </div>
+                </div>
+                <p style="color: #666; font-size: 14px;">注意：导入仅支持文件夹形式，不支持直接导入ZIP包。如果您有ZIP格式的项目，请先解压后再导入。</p>
+            </div>
+            <div id="visualImportMessage" class="export-message" style="display: none; margin-top: 10px; padding: 8px; border-radius: 4px;"></div>
+            <div class="modal-footer" style="margin-top: 15px;">
+                <button id="cancelVisualImport" class="secondary-button">取消</button>
+                <button id="confirmVisualImport" class="primary-button">导入</button>
+            </div>
+        </div>
+    </div>
+
     <script src="./renderer.js"></script>
     <!-- 在body底部引入拖动分割线的外部JS -->
     <script src="./visual-helper-drag.js"></script>
     <script src="./visual-helper-canvas.js"></script>
+    <!-- 引入可视化项目导入导出功能 -->
+    <script src="./visual-helper-project.js"></script>
 </body>
 </html> 

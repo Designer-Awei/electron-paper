@@ -247,6 +247,13 @@
       dataPreview = jsonData.slice(0, 5);
       data = jsonData;
     }
+    
+    // 存储数据到全局变量，供导出功能使用
+    window._visualHelperUploadedData = {
+      columns,
+      dataPreview,
+      data
+    };
   }
   // 假设有上传/解析回调
   window.onVisualHelperDataUpload = handleUploadData;
@@ -678,10 +685,23 @@
     const reader = new FileReader();
     reader.onload = function(e) {
       try {
-        const data = new Uint8Array(e.target.result);
-        const workbook = window.XLSX.read(data, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = window.XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        let json;
+        
+        if (file.name.endsWith('.csv')) {
+          // 对于CSV文件，使用UTF-8编码读取
+          const csvContent = e.target.result;
+          // 使用XLSX库解析CSV
+          const workbook = window.XLSX.read(csvContent, { type: 'string', raw: true });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          json = window.XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        } else {
+          // Excel文件使用二进制方式读取
+          const data = new Uint8Array(e.target.result);
+          const workbook = window.XLSX.read(data, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          json = window.XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        }
+        
         renderPreview(json, file.name);
         // 上传成功后缩小上传框高度
         dropZone.style.height = '80px';
@@ -696,8 +716,17 @@
       preview.innerHTML = `<div style='color:#c00;padding:8px;'>文件读取失败</div>`;
       dropZone.style.height = '140px';
     };
-    reader.readAsArrayBuffer(file);
+    
+    // 根据文件类型选择不同的读取方式
+    if (file.name.endsWith('.csv')) {
+      reader.readAsText(file, 'utf-8'); // 使用UTF-8编码读取CSV文件
+    } else {
+      reader.readAsArrayBuffer(file); // 二进制读取Excel文件
+    }
   }
+  
+  // 将handleFile函数暴露为全局函数，以便在导入项目时能够直接调用
+  window.handleVisualHelperFile = handleFile;
 
   /**
    * 渲染表格预览，含删除按钮

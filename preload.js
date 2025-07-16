@@ -490,6 +490,125 @@ function readFile(filePath) {
     }
 }
 
+/**
+ * 将数据对象数组转换为CSV格式字符串
+ * @param {Array<Object>} data - 数据对象数组
+ * @returns {string} CSV格式字符串
+ */
+function convertToCSV(data) {
+    if (!Array.isArray(data) || data.length === 0) {
+        return '';
+    }
+    
+    // 获取所有列名
+    const columns = Object.keys(data[0]);
+    
+    // 创建CSV标题行
+    const header = columns.join(',');
+    
+    // 创建数据行
+    const rows = data.map(obj => {
+        return columns.map(col => {
+            // 处理特殊字符，如逗号、引号等
+            const value = obj[col];
+            const valueStr = value === null || value === undefined ? '' : String(value);
+            
+            // 如果值包含逗号、引号或换行符，则用引号包裹并处理内部引号
+            if (valueStr.includes(',') || valueStr.includes('"') || valueStr.includes('\n')) {
+                return `"${valueStr.replace(/"/g, '""')}"`;
+            }
+            return valueStr;
+        }).join(',');
+    });
+    
+    // 合并标题和数据行
+    return [header, ...rows].join('\n');
+}
+
+/**
+ * 解析CSV格式字符串为数据对象数组
+ * @param {string} csvString - CSV格式字符串
+ * @returns {Array<Object>} 数据对象数组
+ */
+function parseCSV(csvString) {
+    if (!csvString || typeof csvString !== 'string') {
+        return [];
+    }
+    
+    // 分割行
+    const lines = csvString.split(/\r?\n/);
+    if (lines.length < 2) return [];
+    
+    // 第一行是标题
+    const headers = parseCSVLine(lines[0]);
+    
+    // 解析数据行
+    const result = [];
+    for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue; // 跳过空行
+        
+        const values = parseCSVLine(lines[i]);
+        if (values.length !== headers.length) {
+            console.warn(`CSV行 ${i+1} 的列数与标题不匹配，跳过`);
+            continue;
+        }
+        
+        // 创建对象
+        const obj = {};
+        headers.forEach((header, index) => {
+            // 尝试转换数字
+            const value = values[index];
+            if (value === '') {
+                obj[header] = null;
+            } else if (!isNaN(value) && value.trim() !== '') {
+                obj[header] = Number(value);
+            } else {
+                obj[header] = value;
+            }
+        });
+        
+        result.push(obj);
+    }
+    
+    return result;
+}
+
+/**
+ * 解析CSV行，处理引号、逗号等特殊情况
+ * @param {string} line - CSV行
+ * @returns {Array<string>} 字段值数组
+ */
+function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+            // 检查是否是转义的引号 ""
+            if (i + 1 < line.length && line[i + 1] === '"') {
+                current += '"';
+                i++; // 跳过下一个引号
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            // 遇到逗号且不在引号内，添加当前值并重置
+            result.push(current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    
+    // 添加最后一个值
+    result.push(current);
+    
+    return result;
+}
+
 // 添加会话历史存储
 let chatHistory = [];
 
@@ -738,6 +857,64 @@ function clearChatHistory() {
     }
 }
 
+// 读取项目数据文件
+async function readProjectDataFile(projectPath) {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    
+    // 检查data目录是否存在
+    const dataDir = path.join(projectPath, 'data');
+    if (!fs.existsSync(dataDir)) {
+      console.log('项目中未找到data目录');
+      return { success: false, error: '项目中未找到data目录' };
+    }
+    
+    // 查找data目录中的CSV或Excel文件
+    const files = fs.readdirSync(dataDir);
+    const dataFile = files.find(file => 
+      file.endsWith('.csv') || file.endsWith('.xlsx') || file.endsWith('.xls')
+    );
+    
+    if (!dataFile) {
+      console.log('data目录中未找到数据文件');
+      return { success: false, error: 'data目录中未找到数据文件' };
+    }
+    
+    console.log('找到数据文件:', dataFile);
+    const fullPath = path.join(dataDir, dataFile);
+    
+    // 读取文件内容，使用UTF-8编码
+    let fileContent;
+    if (dataFile.endsWith('.csv')) {
+      // 对于CSV文件，使用UTF-8编码读取
+      fileContent = fs.readFileSync(fullPath, { encoding: 'utf-8' });
+      
+      // 检测BOM头并移除
+      if (fileContent.charCodeAt(0) === 0xFEFF) {
+        fileContent = fileContent.slice(1);
+      }
+      
+      // 转换回Buffer以保持与Excel文件处理一致的接口
+      fileContent = Buffer.from(fileContent);
+    } else {
+      // Excel文件直接读取二进制内容
+      fileContent = fs.readFileSync(fullPath);
+    }
+    
+    return {
+      success: true,
+      fileName: dataFile,
+      content: fileContent,
+      path: fullPath,
+      isCSV: dataFile.endsWith('.csv')
+    };
+  } catch (error) {
+    console.error('读取项目数据文件失败:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // 将 Electron API 暴露给渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
     // arXiv API 相关
@@ -826,4 +1003,416 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeAllListeners('data-agent:result');
         ipcRenderer.removeAllListeners('data-agent:error');
     },
+    
+    // 新增：导出可视化项目
+    exportVisualProject: async (options) => {
+        try {
+            const { path: exportPath, name, format, data } = options;
+            if (!exportPath || !name || !data) {
+                return { success: false, error: '缺少必要参数' };
+            }
+            
+            // 创建项目文件夹
+            const projectDir = format === 'folder' 
+                ? `${exportPath}/${name}`
+                : `${exportPath}/${name}_temp`;
+                
+            try {
+                // 确保目录存在
+                if (!fs.existsSync(projectDir)) {
+                    fs.mkdirSync(projectDir, { recursive: true });
+                }
+                
+                // 创建images目录存放所有图片
+                const imagesDir = path.join(projectDir, 'images');
+                if (!fs.existsSync(imagesDir)) {
+                    fs.mkdirSync(imagesDir, { recursive: true });
+                }
+                
+                // 创建data目录存放所有数据文件
+                const dataDir = path.join(projectDir, 'data');
+                if (!fs.existsSync(dataDir)) {
+                    fs.mkdirSync(dataDir, { recursive: true });
+                }
+            } catch (err) {
+                console.error('创建项目目录失败:', err);
+                return { success: false, error: '创建项目目录失败: ' + err.message };
+            }
+            
+            // 保存项目索引文件前处理图片
+            if (data.canvasState && Array.isArray(data.canvasState)) {
+                console.log('处理导出画布状态中的图片，共', data.canvasState.length, '个项目');
+                
+                for (const shape of data.canvasState) {
+                    if (shape.type === 'image') {
+                        // 处理主图片路径
+                        if (shape.src) {
+                            try {
+                                // 获取图片文件名
+                                let srcPath = '';
+                                let fileName = '';
+                                
+                                // 处理不同格式的路径
+                                if (shape.src.startsWith('file://')) {
+                                    // 移除file://前缀
+                                    srcPath = shape.src.replace(/^file:\/\/\/?/i, '');
+                                    fileName = path.basename(srcPath);
+                                } else if (shape.src.startsWith('/') || shape.src.match(/^[A-Z]:\\/i)) {
+                                    // 绝对路径
+                                    srcPath = shape.src;
+                                    fileName = path.basename(srcPath);
+                                } else {
+                                    // 相对路径，可能是example_png下的文件
+                                    fileName = path.basename(shape.src);
+                                    
+                                    // 尝试从多个可能的位置查找源文件
+                                    const possiblePaths = [
+                                        shape.src, // 原始相对路径
+                                        path.join(process.cwd(), shape.src), // 相对于当前工作目录
+                                        path.join(process.cwd(), 'example_png', fileName) // 在example_png目录下查找
+                                    ];
+                                    
+                                    // 查找第一个存在的文件路径
+                                    for (const p of possiblePaths) {
+                                        if (fs.existsSync(p)) {
+                                            srcPath = p;
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                // 目标路径始终在images目录下
+                                const destPath = path.join(projectDir, 'images', fileName);
+                                
+                                // 如果找到了源文件，复制到images目录
+                                if (srcPath && fs.existsSync(srcPath)) {
+                                    fs.copyFileSync(srcPath, destPath);
+                                    console.log(`已复制图片: ${srcPath} -> ${destPath}`);
+                                    
+                                    // 更新路径为相对路径
+                                    shape.src = `images/${fileName}`;
+                                    console.log(`已更新图片路径: ${shape.src}`);
+                                } else {
+                                    console.warn(`源图片文件不存在，无法复制: ${srcPath || shape.src}`);
+                                }
+                            } catch (err) {
+                                console.error('处理图片文件失败:', err);
+                                // 继续处理其他图片，不中断流程
+                            }
+                        }
+                        
+                        // 处理plot_json中的png_path
+                        if (shape.plot_json && shape.plot_json.png_path) {
+                            try {
+                                // 获取图片文件名
+                                let srcPath = '';
+                                let fileName = '';
+                                
+                                const pngPath = shape.plot_json.png_path;
+                                
+                                // 处理不同格式的路径
+                                if (pngPath.startsWith('file://')) {
+                                    // 移除file://前缀
+                                    srcPath = pngPath.replace(/^file:\/\/\/?/i, '');
+                                    fileName = path.basename(srcPath);
+                                } else if (pngPath.startsWith('/') || pngPath.match(/^[A-Z]:\\/i)) {
+                                    // 绝对路径
+                                    srcPath = pngPath;
+                                    fileName = path.basename(srcPath);
+                                } else {
+                                    // 相对路径，可能是example_png下的文件
+                                    fileName = path.basename(pngPath);
+                                    
+                                    // 尝试从多个可能的位置查找源文件
+                                    const possiblePaths = [
+                                        pngPath, // 原始相对路径
+                                        path.join(process.cwd(), pngPath), // 相对于当前工作目录
+                                        path.join(process.cwd(), 'example_png', fileName) // 在example_png目录下查找
+                                    ];
+                                    
+                                    // 查找第一个存在的文件路径
+                                    for (const p of possiblePaths) {
+                                        if (fs.existsSync(p)) {
+                                            srcPath = p;
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                // 目标路径始终在images目录下
+                                const destPath = path.join(projectDir, 'images', fileName);
+                                
+                                // 如果找到了源文件，复制到images目录
+                                if (srcPath && fs.existsSync(srcPath)) {
+                                    fs.copyFileSync(srcPath, destPath);
+                                    console.log(`已复制PNG: ${srcPath} -> ${destPath}`);
+                                    
+                                    // 更新路径为相对路径
+                                    shape.plot_json.png_path = `images/${fileName}`;
+                                    console.log(`已更新PNG路径: ${shape.plot_json.png_path}`);
+                                } else {
+                                    console.warn(`源PNG文件不存在，无法复制: ${srcPath || pngPath}`);
+                                }
+                            } catch (err) {
+                                console.error('处理plot_json中的PNG文件失败:', err);
+                                // 继续处理其他图片，不中断流程
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 处理上传的数据文件
+            if (data.uploadedData) {
+                try {
+                    console.log('处理上传的数据文件');
+                    
+                    // 如果有原始数据文件路径
+                    if (data.uploadedData.filePath) {
+                        const srcPath = data.uploadedData.filePath;
+                        const fileName = path.basename(srcPath);
+                        const destPath = path.join(projectDir, 'data', fileName);
+                        
+                        // 如果源文件存在，复制到data目录
+                        if (fs.existsSync(srcPath)) {
+                            fs.copyFileSync(srcPath, destPath);
+                            console.log(`已复制数据文件: ${srcPath} -> ${destPath}`);
+                            
+                            // 更新路径为相对路径
+                            data.uploadedData.filePath = `data/${fileName}`;
+                        } else {
+                            console.warn(`源数据文件不存在: ${srcPath}`);
+                            
+                            // 如果源文件不存在，尝试将数据内容保存为CSV
+                            if (data.uploadedData.data && Array.isArray(data.uploadedData.data)) {
+                                // 生成默认文件名
+                                const defaultFileName = `data_${Date.now()}.csv`;
+                                const defaultPath = path.join(projectDir, 'data', defaultFileName);
+                                
+                                // 将数据转换为CSV格式
+                                const csvContent = convertToCSV(data.uploadedData.data);
+                                fs.writeFileSync(defaultPath, csvContent, 'utf8');
+                                console.log(`已生成数据文件: ${defaultPath}`);
+                                
+                                // 更新路径为相对路径
+                                data.uploadedData.filePath = `data/${defaultFileName}`;
+                            }
+                        }
+                    } else if (data.uploadedData.data && Array.isArray(data.uploadedData.data)) {
+                        // 如果没有原始文件路径但有数据内容，生成CSV文件
+                        const defaultFileName = `data_${Date.now()}.csv`;
+                        const defaultPath = path.join(projectDir, 'data', defaultFileName);
+                        
+                        // 将数据转换为CSV格式
+                        const csvContent = convertToCSV(data.uploadedData.data);
+                        fs.writeFileSync(defaultPath, csvContent, 'utf8');
+                        console.log(`已生成数据文件: ${defaultPath}`);
+                        
+                        // 更新路径为相对路径
+                        data.uploadedData.filePath = `data/${defaultFileName}`;
+                    }
+                } catch (err) {
+                    console.error('处理数据文件失败:', err);
+                    // 继续流程，不中断
+                }
+            }
+            
+            // 保存项目索引文件
+            const indexPath = path.join(projectDir, 'project.json');
+            try {
+                fs.writeFileSync(indexPath, JSON.stringify(data, null, 2), 'utf8');
+            } catch (err) {
+                console.error('保存项目索引文件失败:', err);
+                return { success: false, error: '保存项目索引文件失败: ' + err.message };
+            }
+            
+            // 如果是ZIP格式，打包为ZIP文件
+            if (format === 'zip') {
+                try {
+                    // 调用系统命令打包为ZIP
+                    const zipPath = `${exportPath}/${name}.zip`;
+                    await ipcRenderer.invoke('zip-directory', projectDir, zipPath);
+                    
+                    // 删除临时文件夹
+                    fs.rmdirSync(projectDir, { recursive: true });
+                    
+                    return { success: true, path: zipPath };
+                } catch (err) {
+                    console.error('创建ZIP文件失败:', err);
+                    return { success: false, error: '创建ZIP文件失败: ' + err.message };
+                }
+            }
+            
+            return { success: true, path: projectDir };
+        } catch (error) {
+            console.error('导出可视化项目失败:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // 新增：导入可视化项目
+    importVisualProject: async (projectPath) => {
+        try {
+            if (!projectPath) {
+                return { success: false, error: '项目路径不能为空' };
+            }
+            
+            // 检查项目文件夹是否存在
+            if (!fs.existsSync(projectPath)) {
+                return { success: false, error: '项目文件夹不存在' };
+            }
+            
+            // 检查project.json文件是否存在
+            const indexPath = path.join(projectPath, 'project.json');
+            if (!fs.existsSync(indexPath)) {
+                return { success: false, error: '项目索引文件不存在' };
+            }
+            
+            // 读取项目索引文件
+            let projectData;
+            try {
+                const indexContent = fs.readFileSync(indexPath, 'utf8');
+                projectData = JSON.parse(indexContent);
+            } catch (err) {
+                console.error('读取项目索引文件失败:', err);
+                return { success: false, error: '读取项目索引文件失败: ' + err.message };
+            }
+            
+            // 检查images目录是否存在
+            const imagesDir = path.join(projectPath, 'images');
+            const hasImagesDir = fs.existsSync(imagesDir);
+            
+            // 检查data目录是否存在
+            const dataDir = path.join(projectPath, 'data');
+            const hasDataDir = fs.existsSync(dataDir);
+            
+            console.log('项目路径:', projectPath);
+            console.log('images目录是否存在:', hasImagesDir);
+            console.log('data目录是否存在:', hasDataDir);
+            
+            // 处理项目中的图片路径
+            if (projectData.canvasState && Array.isArray(projectData.canvasState)) {
+                console.log('处理画布状态中的图片路径，共', projectData.canvasState.length, '个项目');
+                
+                for (const shape of projectData.canvasState) {
+                    if (shape.type === 'image') {
+                        // 处理主图片路径
+                        if (shape.src) {
+                            try {
+                                console.log('处理图片路径:', shape.src);
+                                
+                                // 如果是相对路径，检查文件是否存在
+                                if (!shape.src.startsWith('file://') && 
+                                    !shape.src.startsWith('http://') && 
+                                    !shape.src.startsWith('https://') && 
+                                    !shape.src.startsWith('/') && 
+                                    !shape.src.match(/^[A-Z]:\\/i)) {
+                                    
+                                    // 构建完整路径（使用正斜杠统一路径格式）
+                                    const normalizedPath = projectPath.replace(/\\/g, '/');
+                                    shape.src = `file:///${normalizedPath}/${shape.src}`;
+                                    console.log('修复图片路径:', shape.src);
+                                }
+                            } catch (err) {
+                                console.error('处理图片路径失败:', err, shape);
+                            }
+                        }
+                        
+                        // 处理plot_json中的png_path
+                        if (shape.plot_json && shape.plot_json.png_path) {
+                            try {
+                                const pngPath = shape.plot_json.png_path;
+                                console.log('处理plot_json中的png路径:', pngPath);
+                                
+                                // 如果是相对路径，检查文件是否存在
+                                if (!pngPath.startsWith('file://') && 
+                                    !pngPath.startsWith('http://') && 
+                                    !pngPath.startsWith('https://') && 
+                                    !pngPath.startsWith('/') && 
+                                    !pngPath.match(/^[A-Z]:\\/i)) {
+                                    
+                                    // 构建完整路径（使用正斜杠统一路径格式）
+                                    const normalizedPath = projectPath.replace(/\\/g, '/');
+                                    shape.plot_json.png_path = `file:///${normalizedPath}/${pngPath}`;
+                                    console.log('修复plot_json中的png_path:', shape.plot_json.png_path);
+                                }
+                            } catch (err) {
+                                console.error('处理plot_json中的png路径失败:', err);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 处理上传的数据文件
+            if (projectData.uploadedData) {
+                try {
+                    console.log('处理上传的数据文件');
+                    
+                    // 如果有数据文件路径
+                    if (projectData.uploadedData.filePath) {
+                        const filePath = projectData.uploadedData.filePath;
+                        console.log('数据文件路径:', filePath);
+                        
+                        // 如果是相对路径，构建完整路径
+                        if (!filePath.startsWith('file://') && 
+                            !filePath.startsWith('http://') && 
+                            !filePath.startsWith('https://') && 
+                            !filePath.startsWith('/') && 
+                            !filePath.match(/^[A-Z]:\\/i)) {
+                            
+                            // 构建完整路径
+                            const fullPath = path.join(projectPath, filePath);
+                            console.log('完整数据文件路径:', fullPath);
+                            
+                            // 检查文件是否存在
+                            if (fs.existsSync(fullPath)) {
+                                console.log('数据文件存在，尝试加载数据');
+                                
+                                // 读取CSV文件
+                                const content = fs.readFileSync(fullPath, 'utf8');
+                                
+                                // 解析CSV数据
+                                const parsedData = parseCSV(content);
+                                if (parsedData && parsedData.length > 0) {
+                                    projectData.uploadedData.data = parsedData;
+                                    console.log('成功加载数据，行数:', parsedData.length);
+                                }
+                            } else {
+                                console.warn('数据文件不存在:', fullPath);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('处理数据文件失败:', err);
+                    // 继续流程，不中断
+                }
+            }
+            
+            return { success: true, data: projectData };
+        } catch (error) {
+            console.error('导入可视化项目失败:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // 获取系统设置
+    getSettings: async () => {
+        try {
+            const configPath = path.join(app.getPath('userData'), 'config.json');
+            if (fs.existsSync(configPath)) {
+                const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                return configData;
+            }
+            return {};
+        } catch (error) {
+            console.error('获取系统设置失败:', error);
+            return {};
+        }
+    },
+
+    // 读取项目数据文件
+    readProjectDataFile: async (projectPath) => {
+        return await readProjectDataFile(projectPath);
+    }
 }); 

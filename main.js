@@ -594,6 +594,204 @@ app.whenReady().then(() => {
     });
     return summary;
   });
+
+  // 处理导出可视化项目
+  ipcMain.handle('export-visual-project', async (event, options) => {
+    try {
+      const { path: exportPath, name, format, data } = options;
+      if (!exportPath || !name || !data) {
+        return { success: false, error: '导出参数不完整' };
+      }
+
+      const fs = require('fs');
+      const fsPromises = fs.promises;
+      const path = require('path');
+      
+      // 创建项目目录
+      const projectDir = path.join(exportPath, name);
+      if (!fs.existsSync(projectDir)) {
+        await fsPromises.mkdir(projectDir, { recursive: true });
+      }
+      
+      // 创建子目录
+      const dataDir = path.join(projectDir, 'data');
+      const imagesDir = path.join(projectDir, 'images');
+      
+      if (!fs.existsSync(dataDir)) {
+        await fsPromises.mkdir(dataDir, { recursive: true });
+      }
+      if (!fs.existsSync(imagesDir)) {
+        await fsPromises.mkdir(imagesDir, { recursive: true });
+      }
+      
+      // 保存项目数据
+      const projectFile = path.join(projectDir, 'project.json');
+      await fsPromises.writeFile(projectFile, JSON.stringify(data, null, 2), 'utf8');
+      
+      // 处理画布图片
+      if (data.canvasState && Array.isArray(data.canvasState)) {
+        for (const shape of data.canvasState) {
+          if (shape.type === 'image' && shape.src) {
+            try {
+              // 提取图片路径
+              let imgPath = shape.src;
+              if (imgPath.startsWith('file://')) {
+                imgPath = imgPath.replace(/^file:\/\/\/?/, '');
+              }
+              
+              // 检查文件是否存在
+              if (fs.existsSync(imgPath)) {
+                // 复制图片到images目录
+                const imgName = path.basename(imgPath);
+                const targetPath = path.join(imagesDir, imgName);
+                await fsPromises.copyFile(imgPath, targetPath);
+                
+                // 更新图片路径为相对路径
+                shape.src = `images/${imgName}`;
+              }
+              
+              // 处理plot_json中的png_path
+              if (shape.plot_json && shape.plot_json.png_path) {
+                let pngPath = shape.plot_json.png_path;
+                if (pngPath.startsWith('file://')) {
+                  pngPath = pngPath.replace(/^file:\/\/\/?/, '');
+                }
+                
+                if (fs.existsSync(pngPath)) {
+                  const pngName = path.basename(pngPath);
+                  const targetPath = path.join(imagesDir, pngName);
+                  await fsPromises.copyFile(pngPath, targetPath);
+                  
+                  // 更新png_path为相对路径
+                  shape.plot_json.png_path = `images/${pngName}`;
+                }
+              }
+            } catch (err) {
+              console.error('处理图片失败:', err);
+            }
+          }
+        }
+      }
+      
+      // 处理上传的数据
+      if (data.uploadedData && data.uploadedData.data && Array.isArray(data.uploadedData.data)) {
+        try {
+          // 将数据保存为CSV文件
+          const csvContent = convertArrayToCSV(data.uploadedData.data);
+          const dataFile = path.join(dataDir, 'data.csv');
+          await fsPromises.writeFile(dataFile, csvContent, 'utf8');
+        } catch (err) {
+          console.error('保存数据文件失败:', err);
+        }
+      }
+      
+      // 如果是ZIP格式，打包为ZIP文件
+      if (format === 'zip') {
+        const archiver = require('archiver');
+        const zipPath = `${projectDir}.zip`;
+        
+        const output = fs.createWriteStream(zipPath);
+        const archive = archiver('zip', {
+          zlib: { level: 9 } // 最高压缩级别
+        });
+        
+        archive.pipe(output);
+        archive.directory(projectDir, false);
+        
+        await new Promise((resolve, reject) => {
+          output.on('close', resolve);
+          archive.on('error', reject);
+          archive.finalize();
+        });
+        
+        // 删除原目录
+        await fsPromises.rm(projectDir, { recursive: true, force: true });
+        
+        return { success: true, path: zipPath };
+      }
+      
+      // 更新项目文件（包含更新后的路径）
+      await fsPromises.writeFile(projectFile, JSON.stringify(data, null, 2), 'utf8');
+      
+      return { success: true, path: projectDir };
+    } catch (error) {
+      console.error('导出可视化项目失败:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 处理导入可视化项目
+  ipcMain.handle('import-visual-project', async (event, projectPath) => {
+    try {
+      if (!projectPath) {
+        return { success: false, error: '项目路径不能为空' };
+      }
+      
+      const fs = require('fs');
+      const path = require('path');
+      
+      // 检查项目文件是否存在
+      const projectFile = path.join(projectPath, 'project.json');
+      if (!fs.existsSync(projectFile)) {
+        return { success: false, error: '找不到项目文件' };
+      }
+      
+      // 读取项目数据
+      const projectData = JSON.parse(fs.readFileSync(projectFile, 'utf8'));
+      
+      return { success: true, data: projectData };
+    } catch (error) {
+      console.error('导入可视化项目失败:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * 将二维数组转换为CSV字符串
+   * @param {Array} array 二维数组
+   * @returns {string} CSV字符串
+   */
+  function convertArrayToCSV(array) {
+    if (!Array.isArray(array) || array.length === 0) {
+      return '';
+    }
+    
+    // 添加UTF-8 BOM标记，确保Excel正确识别UTF-8编码的中文
+    let csvContent = '\ufeff';
+    
+    csvContent += array.map(row => {
+      if (Array.isArray(row)) {
+        return row.map(cell => {
+          // 处理包含逗号、引号或换行符的单元格
+          if (cell === null || cell === undefined) {
+            return '';
+          }
+          const cellStr = String(cell);
+          if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+            return `"${cellStr.replace(/"/g, '""')}"`;
+          }
+          return cellStr;
+        }).join(',');
+      } else if (typeof row === 'object') {
+        // 如果是对象数组，取出所有键作为表头
+        const keys = Object.keys(row);
+        return keys.map(key => {
+          const cell = row[key];
+          if (cell === null || cell === undefined) {
+            return '';
+          }
+          const cellStr = String(cell);
+          if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+            return `"${cellStr.replace(/"/g, '""')}"`;
+          }
+          return cellStr;
+        }).join(',');
+      }
+      return '';
+    }).join('\n');
+    
+    return csvContent;
+  }
 });
 
 app.on('window-all-closed', () => {
