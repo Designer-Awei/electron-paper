@@ -231,6 +231,14 @@
       }
       
       // 获取项目数据
+      let uploadedData = getUploadedData();
+      // 合并真实文件路径和文件名
+      if (window._visualHelperUploadedData && window._visualHelperUploadedData.filePath) {
+        uploadedData = {
+          filePath: window._visualHelperUploadedData.filePath,
+          fileName: window._visualHelperUploadedData.fileName
+        };
+      }
       const projectData = {
         name,
         description,
@@ -238,7 +246,10 @@
         canvasState: getCanvasState(),
         leftChatHistory: getLeftChatHistory(),
         rightChatHistory: getRightChatHistory(),
-        uploadedData: getUploadedData()
+        /**
+         * @description 只保留 filePath 和 fileName 字段，彻底移除 data/columns/dataPreview 等内容
+         */
+        uploadedData
       };
       
       // 调用electron API导出项目

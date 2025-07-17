@@ -1165,51 +1165,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
             // 处理上传的数据文件
             if (data.uploadedData) {
                 try {
-                    console.log('处理上传的数据文件');
-                    
-                    // 如果有原始数据文件路径
+                    /**
+                     * @description 导出前打印上传数据对象和filePath日志，便于调试
+                     */
+                    console.log('导出时 data.uploadedData:', data.uploadedData);
+                    console.log('导出时 data.uploadedData.filePath:', data.uploadedData && data.uploadedData.filePath);
+                    // 只要有原始文件路径，直接复制
                     if (data.uploadedData.filePath) {
                         const srcPath = data.uploadedData.filePath;
-                        const fileName = path.basename(srcPath);
+                        // 优先用fileName字段，无则用basename
+                        const fileName = data.uploadedData.fileName || path.basename(srcPath);
                         const destPath = path.join(projectDir, 'data', fileName);
-                        
-                        // 如果源文件存在，复制到data目录
                         if (fs.existsSync(srcPath)) {
                             fs.copyFileSync(srcPath, destPath);
                             console.log(`已复制数据文件: ${srcPath} -> ${destPath}`);
-                            
-                            // 更新路径为相对路径
-                            data.uploadedData.filePath = `data/${fileName}`;
+                            /**
+                             * @description 只保留相对路径和文件名，移除其它内容
+                             */
+                            data.uploadedData = { filePath: `data/${fileName}`, fileName };
                         } else {
                             console.warn(`源数据文件不存在: ${srcPath}`);
-                            
-                            // 如果源文件不存在，尝试将数据内容保存为CSV
-                            if (data.uploadedData.data && Array.isArray(data.uploadedData.data)) {
-                                // 生成默认文件名
-                                const defaultFileName = `data_${Date.now()}.csv`;
-                                const defaultPath = path.join(projectDir, 'data', defaultFileName);
-                                
-                                // 将数据转换为CSV格式
-                                const csvContent = convertToCSV(data.uploadedData.data);
-                                fs.writeFileSync(defaultPath, csvContent, 'utf8');
-                                console.log(`已生成数据文件: ${defaultPath}`);
-                                
-                                // 更新路径为相对路径
-                                data.uploadedData.filePath = `data/${defaultFileName}`;
-                            }
+                            data.uploadedData = {};
                         }
-                    } else if (data.uploadedData.data && Array.isArray(data.uploadedData.data)) {
-                        // 如果没有原始文件路径但有数据内容，生成CSV文件
-                        const defaultFileName = `data_${Date.now()}.csv`;
-                        const defaultPath = path.join(projectDir, 'data', defaultFileName);
-                        
-                        // 将数据转换为CSV格式
-                        const csvContent = convertToCSV(data.uploadedData.data);
-                        fs.writeFileSync(defaultPath, csvContent, 'utf8');
-                        console.log(`已生成数据文件: ${defaultPath}`);
-                        
-                        // 更新路径为相对路径
-                        data.uploadedData.filePath = `data/${defaultFileName}`;
+                    } else {
+                        data.uploadedData = {};
                     }
                 } catch (err) {
                     console.error('处理数据文件失败:', err);
@@ -1348,36 +1327,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
             if (projectData.uploadedData) {
                 try {
                     console.log('处理上传的数据文件');
-                    
                     // 如果有数据文件路径
                     if (projectData.uploadedData.filePath) {
                         const filePath = projectData.uploadedData.filePath;
                         console.log('数据文件路径:', filePath);
-                        
                         // 如果是相对路径，构建完整路径
                         if (!filePath.startsWith('file://') && 
                             !filePath.startsWith('http://') && 
                             !filePath.startsWith('https://') && 
                             !filePath.startsWith('/') && 
                             !filePath.match(/^[A-Z]:\\/i)) {
-                            
                             // 构建完整路径
                             const fullPath = path.join(projectPath, filePath);
                             console.log('完整数据文件路径:', fullPath);
-                            
                             // 检查文件是否存在
                             if (fs.existsSync(fullPath)) {
-                                console.log('数据文件存在，尝试加载数据');
-                                
-                                // 读取CSV文件
-                                const content = fs.readFileSync(fullPath, 'utf8');
-                                
-                                // 解析CSV数据
-                                const parsedData = parseCSV(content);
-                                if (parsedData && parsedData.length > 0) {
-                                    projectData.uploadedData.data = parsedData;
-                                    console.log('成功加载数据，行数:', parsedData.length);
-                                }
+                                console.log('数据文件存在');
+                                /**
+                                 * @description 只保留filePath和fileName，不再读取和解析csv/excel内容，不再写入data字段
+                                 */
+                                // 不做任何解析，前端导入时只用handleVisualHelperFile加载
                             } else {
                                 console.warn('数据文件不存在:', fullPath);
                             }

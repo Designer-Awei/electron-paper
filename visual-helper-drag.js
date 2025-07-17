@@ -252,7 +252,11 @@
     window._visualHelperUploadedData = {
       columns,
       dataPreview,
-      data
+      data,
+      // 合并 filePath 和 fileName（如果有）
+      ...(window._visualHelperUploadedData && window._visualHelperUploadedData.filePath
+        ? { filePath: window._visualHelperUploadedData.filePath, fileName: window._visualHelperUploadedData.fileName }
+        : {})
     };
   }
   // 假设有上传/解析回调
@@ -707,6 +711,10 @@
         dropZone.style.height = '80px';
         // 关键：通知全局数据已上传
         window.onVisualHelperDataUpload(json);
+        // 记录真实文件路径到全局变量，供导出用
+        if (!window._visualHelperUploadedData) window._visualHelperUploadedData = {};
+        window._visualHelperUploadedData.filePath = file.path || '';
+        window._visualHelperUploadedData.fileName = file.name || '';
       } catch (err) {
         preview.innerHTML = `<div style='color:#c00;padding:8px;'>文件解析失败: ${err.message}</div>`;
         dropZone.style.height = '140px';
