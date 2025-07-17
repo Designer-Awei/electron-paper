@@ -8,6 +8,10 @@ const { spawn } = require('child_process');
 const fetch = require('node-fetch'); // 若在Electron主进程无fetch需npm install node-fetch
 const os = require('os');
 
+// ========== 临时图片目录 ========== //
+const TEMP_IMG_DIR = path.join(process.cwd(), 'temp_images');
+if (!fs.existsSync(TEMP_IMG_DIR)) fs.mkdirSync(TEMP_IMG_DIR, { recursive: true });
+
 const DEFAULT_MODEL = 'THUDM/glm-4-9b-chat'; // 默认大模型名称，可根据实际情况修改
 
 // ========== 工具函数 ==========
@@ -133,13 +137,14 @@ async function detectIntent({ question, model = DEFAULT_MODEL, apiKey }) {
  * @param {string} params.apiKey API密钥
  * @returns {Promise<string>} Python代码
  */
-async function plotCodeAgent({ question, plotFields, plotData, model, apiKey }) {
+async function plotCodeAgent({ question, plotFields, plotData, model, apiKey, pngPath }) {
   /**
    * JSDoc: 生成Python绘图代码
    * - 只输出一段完整的Python代码（只允许使用seaborn或matplotlib，且优先使用seaborn。结尾plt.savefig('output.png', ...)），禁止plt.show()。
    * - 不包裹为JSON，不输出多余解释。
+   * - 保存后用Pillow将图片宽度缩放为240像素（高度自适应）。
    */
-  const prompt = `你是一名专业的数据可视化代码生成助手。请根据下方用户问题、字段名和数据切片，自动推理最适合的数据可视化方案，只输出一段完整的Python绘图代码（只允许使用seaborn或matplotlib，且优先使用seaborn。结尾必须是plt.savefig('output.png', ...)），禁止plt.show()，不要输出多余解释。只能用如下字段：${plotFields.join('、')}。数据示例：${JSON.stringify(plotData.slice(0,5), null, 2)}。用户问题：${question}`;
+  const prompt = `你是一名专业的数据可视化代码生成助手。请根据下方用户问题、字段名和数据切片，自动推理最适合的数据可视化方案，只输出一段完整的Python绘图代码（只允许使用seaborn或matplotlib，且优先使用seaborn。结尾必须是plt.savefig(r'${pngPath.replace(/\\/g, '/')}', dpi=120, bbox_inches='tight')，禁止plt.show()，不要输出多余解释。保存后用Pillow将图片宽度缩放为240像素（高度自适应），即：from PIL import Image; img=Image.open(r'${pngPath.replace(/\\/g, '/')}'); w,h=img.size; img=img.resize((240,int(h*240/w)),Image.ANTIALIAS); img.save(r'${pngPath.replace(/\\/g, '/')}')）。只能用如下字段：${plotFields.join('、')}。数据示例：${JSON.stringify(plotData.slice(0,5), null, 2)}。用户问题：${question}`;
   const res = await callLLMWithRetry({
     model,
     apiKey,
@@ -393,25 +398,39 @@ async function plotChain({ question, columns, dataPreview, data, model, apiKey }
     model,
     apiKey
   );
-  // 2. 代码生成
-  let code = await plotCodeAgent({ question, plotFields, plotData: data, model, apiKey });
-  let pngPath = null;
+  // 2. 生成唯一临时图片路径
+  const pngPath = path.join(TEMP_IMG_DIR, `plot_${Date.now()}_${Math.random().toString(36).slice(2,8)}.png`);
+  // 3. 代码生成
+  let code = await plotCodeAgent({ question, plotFields, plotData: data, model, apiKey, pngPath });
+  let resultPngPath = null;
   let error = null;
-  // 3. Python执行，失败则自动修复，最多重试3次
+  // 4. Python执行，失败则自动修复，最多重试3次
   for (let i = 0; i < 3; i++) {
     try {
       // 这里假设runPythonPlotCode返回{pngPath: string}
-      const result = await runPythonPlotCode({ code, data });
-      pngPath = result.pngPath || result.png_path || result;
-      if (pngPath) break;
+      const result = await runPythonPlotCode({ code, data, pngPath });
+      resultPngPath = result.pngPath || result.png_path || result;
+      if (resultPngPath && fs.existsSync(resultPngPath)) break;
     } catch (err) {
       error = err;
       code = await codeRepairAgent({ code, error, dataPreview, question, model, apiKey });
     }
   }
-  if (!pngPath) throw new Error('代码修复失败，未能生成图片');
-  // 4. 返回python_code和png_path
-  return { python_code: code, png_path: pngPath };
+  // 5. 兜底：如果失败，生成一张错误提示图片
+  if (!resultPngPath || !fs.existsSync(resultPngPath)) {
+    const { createCanvas } = require('canvas');
+    const canvas = createCanvas(240, 80);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0,0,240,80);
+    ctx.fillStyle = '#c00'; ctx.font = 'bold 16px sans-serif';
+    ctx.fillText('绘图失败', 60, 40);
+    const out = fs.createWriteStream(pngPath);
+    const stream = canvas.createPNGStream();
+    await new Promise(res => { stream.pipe(out); out.on('finish', res); });
+    resultPngPath = pngPath;
+  }
+  // 6. 返回python_code和png_path
+  return { python_code: code, png_path: resultPngPath };
 }
 
 // calc链路（去除所有agent执行状态/进度回调相关代码，保持主流程简洁）

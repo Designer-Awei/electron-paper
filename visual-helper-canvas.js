@@ -11,12 +11,7 @@ function render() {
   
   const area = document.getElementById('vhCanvasArea');
   if (area) {
-    // 自适应尺寸
-    const rect = area.getBoundingClientRect();
-    if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
-      canvas.width = Math.round(rect.width);
-      canvas.height = Math.round(rect.height);
-    }
+    // 自适应尺寸逻辑已移除
   }
   
   const ctx = canvas.getContext('2d');
@@ -135,9 +130,9 @@ window.render = render;
     if (shape.type === 'image') {
       const img = new window.Image();
       img.onload = function() {
-        // 按宽度等比缩放
-        const scale = shape.width / img.width;
-        shape.height = img.height * scale;
+        // 按宽度等比缩放，始终宽度为240
+        shape.width = 240;
+        shape.height = img.height * (240 / img.width);
         shape._img = img;
         render();
       };
@@ -262,23 +257,20 @@ window.render = render;
     render();
   }
 
-  // 替换原来的render调用为innerRender
+  // 恢复resizeCanvasToFit为独立函数，只在窗口resize和DOMContentLoaded时调用
   function resizeCanvasToFit() {
+    const area = document.getElementById('vhCanvasArea');
+    const canvas = document.getElementById('mainCanvas');
+    if (!area || !canvas) return;
     const rect = area.getBoundingClientRect();
     if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
       canvas.width = Math.round(rect.width);
       canvas.height = Math.round(rect.height);
-      innerRender(); // 尺寸变化后立即刷新
+      render(); // 尺寸变化后立即刷新
     }
   }
-  window.addEventListener('resize', () => {
-    resizeCanvasToFit();
-    innerRender();
-  });
-  window.addEventListener('DOMContentLoaded', function() {
-    resizeCanvasToFit();
-    innerRender();
-  });
+  window.addEventListener('resize', resizeCanvasToFit);
+  window.addEventListener('DOMContentLoaded', resizeCanvasToFit);
 
   // 滚轮事件
   viewport.addEventListener('wheel', function(e) {
@@ -288,17 +280,22 @@ window.render = render;
       const prevScale = scale;
       scale += e.deltaY * -0.001;
       scale = Math.max(0.2, Math.min(3, scale));
-      // 缩放中心为鼠标位置
+      // 缩放中心为鼠标位置（canvas像素坐标）
       const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
+      const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const my = (e.clientY - rect.top) * (canvas.height / rect.height);
       offsetX = mx - (mx - offsetX) * (scale / prevScale);
       offsetY = my - (my - offsetY) * (scale / prevScale);
+      // 同步全局变量
+      window._canvasOffsetX = offsetX;
+      window._canvasOffsetY = offsetY;
+      window._canvasScale = scale;
       render();
     } else {
       // 上下平移
       e.preventDefault();
       offsetY -= e.deltaY;
+      window._canvasOffsetY = offsetY;
       render();
     }
   });
@@ -319,12 +316,35 @@ window.render = render;
     }
   });
 
+  // 修复canvas事件坐标换算，保证高分屏/自适应下操作正常
+  function getCanvasMousePos(e, canvas) {
+    const rect = canvas.getBoundingClientRect();
+    // 计算相对于canvas的像素坐标（适配高分屏和缩放）
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    return { mx, my };
+  }
+
+  // 让canvas可聚焦，点击时自动focus
+  canvas.setAttribute('tabindex', '0');
+  canvas.style.outline = 'none';
+  canvas.addEventListener('mousedown', () => canvas.focus());
+
+  // 监听canvas自身的键盘事件
+  canvas.addEventListener('keydown', e => {
+    if (e.code === 'Space') spacePressed = true;
+  });
+  canvas.addEventListener('keyup', e => {
+    if (e.code === 'Space') spacePressed = false;
+  });
+
   // 选中与拖动图形、画布平移、缩放、Alt+拖动复制
   canvas.addEventListener('mousedown', function(e) {
     if (e.button !== 0) return;
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left - offsetX) / scale;
-    const my = (e.clientY - rect.top - offsetY) / scale;
+    const { mx, my } = getCanvasMousePos(e, canvas);
+    // 关键：换算为画布内容逻辑坐标
+    const logicX = (mx - offsetX) / scale;
+    const logicY = (my - offsetY) / scale;
     // 空格+左键：画布平移
     if (spacePressed) {
       dragging = true;
@@ -336,15 +356,15 @@ window.render = render;
     // Alt+左键长按：复制图形
     if (altPressed || e.altKey) {
       for (const shape of shapes) {
-        if (isPointInShape(mx, my, shape)) {
+        if (isPointInShape(logicX, logicY, shape)) {
           pushUndo(); // 复制前保存快照
           altCopyTimer = setTimeout(() => {
             altCopyShape = { ...shape, x: shape.x + 20, y: shape.y + 20, selected: true };
             shapes.forEach(s => s.selected = false);
             shapes.push(altCopyShape);
             isAltCopying = true;
-            dragOffsetX = mx - altCopyShape.x;
-            dragOffsetY = my - altCopyShape.y;
+            dragOffsetX = logicX - altCopyShape.x;
+            dragOffsetY = logicY - altCopyShape.y;
             render();
           }, 180);
           return;
@@ -355,10 +375,10 @@ window.render = render;
     for (const shape of shapes) {
       if (shape.selected) {
         for (const handle of getResizeHandles(shape)) {
-          if (isPointInHandle(mx, my, handle)) {
+          if (isPointInHandle(logicX, logicY, handle)) {
             pushUndo(); // 缩放前保存快照
             resizingShape = shape;
-            resizeStart = { x: mx, y: my };
+            resizeStart = { x: logicX, y: logicY };
             resizeOrigin = { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
             resizeHandleType = handle.type;
             canvas.style.cursor = handle.type+'-resize';
@@ -385,7 +405,7 @@ window.render = render;
     // 查找是否点中某个图形
     let found = false;
     for (const shape of shapes) {
-      if (isPointInShape(mx, my, shape)) {
+      if (isPointInShape(logicX, logicY, shape)) {
         found = true;
         shapes.forEach(s => s.selected = false);
         shape.selected = true;
@@ -393,8 +413,8 @@ window.render = render;
         pushUndo(); // 选中后准备拖动，先保存快照
         dragTimer = setTimeout(() => {
           draggingShape = shape;
-          dragOffsetX = mx - shape.x;
-          dragOffsetY = my - shape.y;
+          dragOffsetX = logicX - shape.x;
+          dragOffsetY = logicY - shape.y;
           isDragging = true;
         }, 180);
         break;
@@ -438,21 +458,36 @@ window.render = render;
     aspectResizeInfo = null;
   });
 
+  /**
+   * 画布mousemove事件，优先处理画布平移（空格+左键拖动）
+   * @param {MouseEvent} e 鼠标事件
+   */
   canvas.addEventListener('mousemove', function(e) {
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left - offsetX) / scale;
-    const my = (e.clientY - rect.top - offsetY) / scale;
+    // 画布平移（空格+左键拖动）
+    if (dragging) {
+      offsetX += e.clientX - lastX;
+      offsetY += e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      window._canvasOffsetX = offsetX;
+      window._canvasOffsetY = offsetY;
+      render();
+      return;
+    }
+    const { mx, my } = getCanvasMousePos(e, canvas);
+    const logicX = (mx - offsetX) / scale;
+    const logicY = (my - offsetY) / scale;
     // 四角缩放
     if (resizingShape && resizeStart && resizeOrigin && resizeHandleType) {
-      let dx = mx - resizeStart.x;
-      let dy = my - resizeStart.y;
+      let dx = logicX - resizeStart.x;
+      let dy = logicY - resizeStart.y;
       let newX = resizeOrigin.x, newY = resizeOrigin.y, newW = resizeOrigin.width, newH = resizeOrigin.height;
       if (e.shiftKey && aspectResizeInfo) {
         // 以定位点为基准，鼠标点到定位点的距离
         let anchorX = aspectResizeInfo.anchorX;
         let anchorY = aspectResizeInfo.anchorY;
-        let dxNow = Math.abs(mx - anchorX);
-        let dyNow = Math.abs(my - anchorY);
+        let dxNow = Math.abs(logicX - anchorX);
+        let dyNow = Math.abs(logicY - anchorY);
         // 取主方向
         let scaleRatio = 1;
         if (aspectResizeInfo.dx0 >= aspectResizeInfo.dy0) {
@@ -542,27 +577,17 @@ window.render = render;
         draggingShape = null;
       }
       if (isAltCopying && altCopyShape) {
-        altCopyShape.x = mx - dragOffsetX;
-        altCopyShape.y = my - dragOffsetY;
+        altCopyShape.x = logicX - dragOffsetX;
+        altCopyShape.y = logicY - dragOffsetY;
         canvas.style.cursor = 'copy';
         render();
         return;
       }
     }
-    // 拖动画布
-    if (dragging && spacePressed) {
-      offsetX += e.clientX - lastX;
-      offsetY += e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      canvas.style.cursor = 'grab';
-      render();
-      return;
-    }
     // 拖动图形
     if (isDragging && draggingShape) {
-      draggingShape.x = mx - dragOffsetX;
-      draggingShape.y = my - dragOffsetY;
+      draggingShape.x = logicX - dragOffsetX;
+      draggingShape.y = logicY - dragOffsetY;
       canvas.style.cursor = altPressed || e.altKey ? 'copy' : '';
       render();
       return;
@@ -572,7 +597,7 @@ window.render = render;
     for (const shape of shapes) {
       if (shape.selected) {
         for (const handle of getResizeHandles(shape)) {
-          if (isPointInHandle(mx, my, handle)) {
+          if (isPointInHandle(logicX, logicY, handle)) {
             switch (handle.type) {
               case 'nw': hoverCursor = 'nwse-resize'; break;
               case 'ne': hoverCursor = 'nesw-resize'; break;
@@ -586,6 +611,10 @@ window.render = render;
     }
     // Alt悬停时显示复制光标
     if (!hoverCursor && (altPressed || e.altKey)) hoverCursor = 'copy';
+    // 空格按下时显示抓手光标
+    if (spacePressed) hoverCursor = 'grab';
+    // Ctrl按下时显示缩放光标
+    if (e.ctrlKey) hoverCursor = 'zoom-in';
     canvas.style.cursor = hoverCursor;
   });
 

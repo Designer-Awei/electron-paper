@@ -912,7 +912,7 @@ async function readProjectDataFile(projectPath) {
   } catch (error) {
     console.error('读取项目数据文件失败:', error);
     return { success: false, error: error.message };
-  }
+    }
 }
 
 // 将 Electron API 暴露给渲染进程
